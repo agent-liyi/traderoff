@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { Episode } from '@/lib/types';
-import getDb from '@/lib/db';
+import db from '@/lib/db';
 import PlayButton from '@/components/PlayButton';
 
 export const metadata: Metadata = {
@@ -11,11 +11,16 @@ export const metadata: Metadata = {
 
 export const dynamic = 'force-dynamic';
 
-export default function EpisodesPage() {
-  const db = getDb();
-  const episodes = db
-    .prepare('SELECT * FROM episodes ORDER BY publish_date DESC, id DESC')
-    .all() as Episode[];
+export default async function EpisodesPage() {
+  let episodes: Episode[] = [];
+  try {
+    const result = await db.execute(
+      'SELECT * FROM episodes ORDER BY publish_date DESC, id DESC'
+    );
+    episodes = result.rows as unknown as Episode[];
+  } catch {
+    episodes = [];
+  }
 
   return (
     <div className="min-h-screen">

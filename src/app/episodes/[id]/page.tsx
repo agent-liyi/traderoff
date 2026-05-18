@@ -2,19 +2,20 @@ import Link from 'next/link';
 import type { Metadata } from 'next';
 import { Episode } from '@/lib/types';
 import { notFound } from 'next/navigation';
-import getDb from '@/lib/db';
+import db from '@/lib/db';
 import { htmlToExcerpt } from '@/lib/html-to-text';
 import PlayButton from '@/components/PlayButton';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dongtaipingheng.com';
 
-function getEpisode(id: string): Episode | null {
+async function getEpisode(id: string): Promise<Episode | null> {
   try {
-    const db = getDb();
-    const episode = db
-      .prepare('SELECT * FROM episodes WHERE id = ?')
-      .get(id) as Episode | undefined;
-    return episode || null;
+    const result = await db.execute({
+      sql: 'SELECT * FROM episodes WHERE id = ?',
+      args: [id],
+    });
+    if (result.rows.length === 0) return null;
+    return result.rows[0] as unknown as Episode;
   } catch {
     return null;
   }
@@ -43,7 +44,7 @@ export async function generateMetadata({
 }: {
   params: { id: string };
 }): Promise<Metadata> {
-  const episode = getEpisode(params.id);
+  const episode = await getEpisode(params.id);
   if (!episode) return {};
 
   const description = episode.description
@@ -80,12 +81,12 @@ export async function generateMetadata({
   };
 }
 
-export default function EpisodePage({
+export default async function EpisodePage({
   params,
 }: {
   params: { id: string };
 }) {
-  const episode = getEpisode(params.id);
+  const episode = await getEpisode(params.id);
 
   if (!episode) {
     notFound();

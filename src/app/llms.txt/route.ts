@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import getDb from '@/lib/db';
+import db from '@/lib/db';
 import { htmlToExcerpt } from '@/lib/html-to-text';
 import { Episode } from '@/lib/types';
 
@@ -8,10 +8,10 @@ export const dynamic = 'force-dynamic';
 export async function GET() {
   let episodes: Episode[] = [];
   try {
-    const db = getDb();
-    episodes = db
-      .prepare('SELECT * FROM episodes ORDER BY episode_number ASC')
-      .all() as Episode[];
+    const result = await db.execute(
+      'SELECT * FROM episodes ORDER BY episode_number ASC'
+    );
+    episodes = result.rows as unknown as Episode[];
   } catch {
     episodes = [];
   }

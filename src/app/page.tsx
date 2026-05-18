@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
 import { Episode } from '@/lib/types';
-import getDb from '@/lib/db';
+import db from '@/lib/db';
 import PlayButton from '@/components/PlayButton';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dongtaipingheng.com';
@@ -24,10 +24,10 @@ export const metadata: Metadata = {
   },
 };
 
-function getEpisodes(): Episode[] {
+async function getEpisodes(): Promise<Episode[]> {
   try {
-    const db = getDb();
-    return db.prepare('SELECT * FROM episodes ORDER BY id DESC').all() as Episode[];
+    const result = await db.execute('SELECT * FROM episodes ORDER BY id DESC');
+    return result.rows as unknown as Episode[];
   } catch {
     return [];
   }
@@ -35,8 +35,8 @@ function getEpisodes(): Episode[] {
 
 export const dynamic = 'force-dynamic';
 
-export default function HomePage() {
-  const episodes = getEpisodes();
+export default async function HomePage() {
+  const episodes = await getEpisodes();
   const latestEpisodes = episodes.slice(0, 3);
 
   const jsonLd = {

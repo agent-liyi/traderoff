@@ -20,7 +20,7 @@ yarn-error.log*
 # local env files
 .env*.local
 
-# database
+# database (本地开发文件，不提交)
 data/podcast.db
 
 # uploads (user content)

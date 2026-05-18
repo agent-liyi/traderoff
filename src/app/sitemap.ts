@@ -1,18 +1,18 @@
 import { MetadataRoute } from 'next';
-import getDb from '@/lib/db';
+import db from '@/lib/db';
 import { Episode } from '@/lib/types';
 
 export const dynamic = 'force-dynamic';
 
 const BASE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://dongtaipingheng.com';
 
-export default function sitemap(): MetadataRoute.Sitemap {
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   let episodes: Episode[] = [];
   try {
-    const db = getDb();
-    episodes = db
-      .prepare('SELECT id, updated_at, publish_date FROM episodes ORDER BY id ASC')
-      .all() as Episode[];
+    const result = await db.execute(
+      'SELECT id, updated_at, publish_date FROM episodes ORDER BY id ASC'
+    );
+    episodes = result.rows as unknown as Episode[];
   } catch {
     episodes = [];
   }
