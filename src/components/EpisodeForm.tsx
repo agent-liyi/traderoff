@@ -13,6 +13,8 @@ export default function EpisodeForm({ episode }: EpisodeFormProps) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [coverPreview, setCoverPreview] = useState(episode?.cover_image || '');
+  const [audioFileName, setAudioFileName] = useState('');
+  const [audioUploading, setAudioUploading] = useState(false);
 
   const [form, setForm] = useState({
     episode_number: episode?.episode_number || '',
@@ -51,6 +53,32 @@ export default function EpisodeForm({ episode }: EpisodeFormProps) {
     } else {
       alert('图片上传失败');
     }
+  };
+
+  const handleAudioUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAudioUploading(true);
+    setAudioFileName(file.name);
+
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (res.ok) {
+      const { url } = await res.json();
+      handleChange('audio_url', url);
+    } else {
+      alert('音频上传失败');
+      setAudioFileName('');
+    }
+
+    setAudioUploading(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -190,16 +218,46 @@ export default function EpisodeForm({ episode }: EpisodeFormProps) {
         </div>
         <div className="md:col-span-2">
           <label className="block text-sm font-medium mb-2">
-            音频 URL
+            音频文件
           </label>
-          <input
-            type="url"
-            value={form.audio_url}
-            onChange={(e) => handleChange('audio_url', e.target.value)}
-            placeholder="https://example.com/episode.mp3"
-            className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/50"
-          />
-          <p className="mt-1 text-xs text-stone-400">填写后将在网站内直接提供播放功能</p>
+          <div className="space-y-3">
+            {/* 文件上传 */}
+            <div className="flex items-center gap-3">
+              <label className="px-4 py-2.5 bg-stone-100 border border-stone-300 rounded-lg cursor-pointer hover:bg-stone-200 transition-colors text-sm font-medium inline-block">
+                {audioUploading ? '上传中...' : '选择音频文件'}
+                <input
+                  type="file"
+                  accept="audio/*"
+                  onChange={handleAudioUpload}
+                  className="hidden"
+                  disabled={audioUploading}
+                />
+              </label>
+              {audioFileName && (
+                <span className="text-sm text-stone-600 truncate max-w-xs">
+                  {audioFileName}
+                  {audioUploading && ' (上传中...)'}
+                </span>
+              )}
+              {form.audio_url && !audioUploading && (
+                <span className="text-xs text-green-600">✓ 已上传</span>
+              )}
+            </div>
+            {/* URL 直接输入（备用） */}
+            <div>
+              <label className="block text-xs text-stone-400 mb-1">
+                或直接填写音频 URL
+              </label>
+              <input
+                type="url"
+                value={form.audio_url}
+                onChange={(e) => handleChange('audio_url', e.target.value)}
+                placeholder="https://example.com/episode.mp3"
+                className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/50"
+              />
+            </div>
+          </div>
+          <p className="mt-1 text-xs text-stone-400">上传后可在网站内直接播放；暂不支持也会保留 URL 手动填入的方式</p>
         </div>
       </div>
 
