@@ -27,3 +27,4 @@ data/podcast.db
 public/uploads/*
 !public/uploads/.gitkeep
 .env.production
+
