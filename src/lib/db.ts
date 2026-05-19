@@ -1,22 +1,22 @@
 import { createClient } from '@libsql/client';
 
-function getDbUrl(): string {
+function getDbConfig() {
   const url = process.env.TURSO_DATABASE_URL;
-  if (url) return url;
-
-  // 仅本地开发时 fallback 到本地文件
-  if (process.env.NODE_ENV === 'development') {
-    return 'file:./data/podcast.db';
+  if (url) {
+    return { url, authToken: process.env.TURSO_AUTH_TOKEN };
   }
 
-  throw new Error(
-    'TURSO_DATABASE_URL is not set. Add it to Vercel Environment Variables and redeploy.'
-  );
+  // 自部署模式（腾讯云 / 本地）：使用本地 SQLite 文件
+  // Vercel 部署时会走上面的 Turso 分支
+  const dbPath = process.env.SQLITE_DB_PATH || 'file:./data/podcast.db';
+  return { url: dbPath };
 }
 
+const { url, authToken } = getDbConfig();
+
 const db = createClient({
-  url: getDbUrl(),
-  authToken: process.env.TURSO_AUTH_TOKEN,
+  url,
+  authToken,
 });
 
 export default db;
