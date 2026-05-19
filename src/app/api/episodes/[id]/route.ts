@@ -1,19 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readFile, unlink } from 'fs/promises';
+import { existsSync } from 'fs';
 import db from '@/lib/db';
 import { Episode } from '@/lib/types';
 
-/** 将 base64 字符串解码为 Buffer，存入 audio_data BLOB */
-async function storeAudioFromBase64(episodeId: number, base64: string | null) {
-  if (!base64) return;
+/** 将临时音频文件读入 BLOB 并删除临时文件 */
+async function storeAudioFromFile(episodeId: number, filePath: string | null) {
+  if (!filePath || !existsSync(filePath)) return;
   try {
-    const buffer = Buffer.from(base64, 'base64');
+    const buffer = await readFile(filePath);
     if (buffer.length === 0) return;
     await db.execute({
       sql: 'UPDATE episodes SET audio_data = ? WHERE id = ?',
       args: [buffer, episodeId],
     });
-  } catch (e) {
-    console.error('Failed to store audio BLOB from base64:', e);
+    await unlink(filePath).catch(() => {});
+    console.log(`Audio stored for episode ${episodeId}: ${buffer.length} bytes`);
+  } catch (e: any) {
+    console.error('Failed to store audio BLOB:', e.message);
+    throw e;
   }
 }
 
@@ -28,7 +33,7 @@ export async function GET(
     });
 
     if (result.rows.length === 0) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 });
+      return NextResponse.json({ error: '节目不存在' }, { status: 404 });
     }
 
     const row = result.rows[0] as any;
@@ -38,10 +43,10 @@ export async function GET(
       has_db_audio: !!(row.audio_data),
     };
     return NextResponse.json(episode);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to get episode:', error);
     return NextResponse.json(
-      { error: 'Failed to get episode' },
+      { error: `读取节目失败: ${error.message}` },
       { status: 500 }
     );
   }
@@ -53,7 +58,7 @@ export async function PUT(
 ) {
   try {
     const body = await request.json();
-    const { audio_base64, ...episodeData } = body;
+    const { audio_path, audio_base64, ...episodeData } = body;
 
     await db.execute({
       sql: `UPDATE episodes SET
@@ -86,8 +91,22 @@ export async function PUT(
       ],
     });
 
-    // 将 base64 音频数据解码存入 BLOB 列
-    await storeAudioFromBase64(Number(params.id), audio_base64 || null);
+    // 从临时文件读入 BLOB（优先新方式，兼容旧 base64）
+    if (audio_path) {
+      await storeAudioFromFile(Number(params.id), audio_path);
+    } else if (audio_base64) {
+      try {
+        const buffer = Buffer.from(audio_base64, 'base64');
+        if (buffer.length > 0) {
+          await db.execute({
+            sql: 'UPDATE episodes SET audio_data = ? WHERE id = ?',
+            args: [buffer, Number(params.id)],
+          });
+        }
+      } catch (e: any) {
+        console.error('Failed to store audio from base64:', e.message);
+      }
+    }
 
     const updated = await db.execute({
       sql: 'SELECT * FROM episodes WHERE id = ?',
@@ -96,10 +115,10 @@ export async function PUT(
 
     const episode = updated.rows[0] as unknown as Episode;
     return NextResponse.json(episode);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to update episode:', error);
     return NextResponse.json(
-      { error: 'Failed to update episode' },
+      { error: `更新节目失败: ${error.message || '未知错误'}` },
       { status: 500 }
     );
   }
@@ -115,10 +134,10 @@ export async function DELETE(
       args: [params.id],
     });
     return NextResponse.json({ success: true });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to delete episode:', error);
     return NextResponse.json(
-      { error: 'Failed to delete episode' },
+      { error: `删除节目失败: ${error.message}` },
       { status: 500 }
     );
   }

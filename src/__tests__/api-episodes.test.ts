@@ -30,7 +30,8 @@ describe('API /api/episodes', () => {
       mockDb.execute.mockRejectedValueOnce(new Error('boom'));
       const res = await GET();
       expect(res.status).toBe(500);
-      expect(await res.json()).toEqual([]);
+      const data = await res.json();
+      expect(data.error).toContain('读取节目列表失败');
     });
 
     it('无节目返回 []', async () => {

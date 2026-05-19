@@ -28,7 +28,7 @@ export default function EpisodeForm({ episode }: EpisodeFormProps) {
     link_xiaoyuzhou: episode?.link_xiaoyuzhou || '',
     link_apple_podcasts: episode?.link_apple_podcasts || '',
     audio_url: episode?.audio_url || '',
-    audio_base64: '',
+    audio_path: '',
   });
 
   const handleChange = (field: string, value: string) => {
@@ -42,17 +42,23 @@ export default function EpisodeForm({ episode }: EpisodeFormProps) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const res = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-    });
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
 
-    if (res.ok) {
-      const { dataUrl } = await res.json();
-      setForm((prev) => ({ ...prev, cover_image: dataUrl }));
-      setCoverPreview(dataUrl);
-    } else {
-      alert('图片上传失败');
+      const data = await res.json();
+      if (res.ok) {
+        const filename = data.path.split('/').pop();
+        const mediaUrl = `/api/media/${filename}`;
+        setForm((prev) => ({ ...prev, cover_image: mediaUrl }));
+        setCoverPreview(mediaUrl);
+      } else {
+        alert(`图片上传失败: ${data.error || '未知错误'}`);
+      }
+    } catch (err: any) {
+      alert(`图片上传失败: ${err.message || '网络错误'}`);
     }
   };
 
@@ -66,17 +72,22 @@ export default function EpisodeForm({ episode }: EpisodeFormProps) {
     const formData = new FormData();
     formData.append('file', file);
 
-    const res = await fetch('/api/upload', {
-      method: 'POST',
-      body: formData,
-    });
+    try {
+      const res = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      });
 
-    if (res.ok) {
-      const { base64 } = await res.json();
-      handleChange('audio_base64', base64);
-      handleChange('audio_url', '');
-    } else {
-      alert('音频上传失败');
+      const data = await res.json();
+      if (res.ok) {
+        handleChange('audio_path', data.path);
+        handleChange('audio_url', '');
+      } else {
+        alert(`音频上传失败: ${data.error || '未知错误'}`);
+        setAudioFileName('');
+      }
+    } catch (err: any) {
+      alert(`音频上传失败: ${err.message || '网络错误'}`);
       setAudioFileName('');
     }
 
@@ -241,7 +252,7 @@ export default function EpisodeForm({ episode }: EpisodeFormProps) {
                   {audioUploading && ' (上传中...)'}
                 </span>
               )}
-              {form.audio_base64 && !audioUploading && (
+              {form.audio_path && !audioUploading && (
                 <span className="text-xs text-green-600">✓ 已上传（将存入数据库）</span>
               )}
             </div>
@@ -255,7 +266,7 @@ export default function EpisodeForm({ episode }: EpisodeFormProps) {
                 value={form.audio_url}
                 onChange={(e) => {
                   handleChange('audio_url', e.target.value);
-                  if (e.target.value) handleChange('audio_base64', '');
+                  if (e.target.value) handleChange('audio_path', '');
                 }}
                 placeholder="https://example.com/episode.mp3"
                 className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/50"

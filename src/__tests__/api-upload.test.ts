@@ -13,6 +13,6 @@ describe('API /api/upload', () => {
     const res = await POST(req as any);
     expect(res.status).toBe(400);
     const data = await res.json();
-    expect(data.error).toBe('No file uploaded');
+    expect(data.error).toBe('未选择文件');
   });
 });
