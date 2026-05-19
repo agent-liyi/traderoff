@@ -20,7 +20,11 @@ async function storeAudioFromBase64(episodeId: number, base64: string | null) {
 export async function GET() {
   try {
     const result = await db.execute('SELECT * FROM episodes ORDER BY id DESC');
-    const episodes = result.rows as unknown as Episode[];
+    const episodes = (result.rows as unknown as Episode[]).map((row: any) => ({
+      ...row,
+      audio_data: undefined,
+      has_db_audio: !!(row.audio_data),
+    }));
     return NextResponse.json(episodes);
   } catch (error) {
     console.error('Failed to get episodes:', error);

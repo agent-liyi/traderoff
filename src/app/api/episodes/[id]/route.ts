@@ -31,7 +31,12 @@ export async function GET(
       return NextResponse.json({ error: 'Not found' }, { status: 404 });
     }
 
-    const episode = result.rows[0] as unknown as Episode;
+    const row = result.rows[0] as any;
+    const episode = {
+      ...row,
+      audio_data: undefined,
+      has_db_audio: !!(row.audio_data),
+    };
     return NextResponse.json(episode);
   } catch (error) {
     console.error('Failed to get episode:', error);
