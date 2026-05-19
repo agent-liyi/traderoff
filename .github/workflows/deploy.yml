@@ -28,11 +28,13 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
-          fingerprint: SHA256:3xJea3kZZ7jy0k9HiAGhoWtDWBLdWUUq9ZEALzD/X6I
+          fingerprint: SHA256:aFIh/O2RJch6USPG7hcnqtFKH/PeLPsNlVGwJKp+WLg
           script: |
+            set -e
             cd /app/podcast-site
             git fetch origin
             git reset --hard origin/main
             npm ci
-            npx next build
+            npm run build
             pm2 reload dongtaipingheng
+            echo "✓ Deployed $(git log --oneline -1)"
