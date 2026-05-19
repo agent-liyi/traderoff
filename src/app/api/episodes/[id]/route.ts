@@ -1,21 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { readFileSync } from 'fs';
-import path from 'path';
 import db from '@/lib/db';
 import { Episode } from '@/lib/types';
 
-/** 如果 audio_url 指向本地文件，读入并作为 BLOB 存入 DB */
-async function storeAudioBlob(episodeId: number, audioUrl: string | null) {
-  if (!audioUrl || !audioUrl.startsWith('/uploads/')) return;
+/** 将 base64 字符串解码为 Buffer，存入 audio_data BLOB */
+async function storeAudioFromBase64(episodeId: number, base64: string | null) {
+  if (!base64) return;
   try {
-    const filePath = path.join(process.cwd(), 'public', audioUrl);
-    const buffer = readFileSync(filePath);
+    const buffer = Buffer.from(base64, 'base64');
+    if (buffer.length === 0) return;
     await db.execute({
       sql: 'UPDATE episodes SET audio_data = ? WHERE id = ?',
       args: [buffer, episodeId],
     });
   } catch (e) {
-    console.error('Failed to store audio BLOB:', e);
+    console.error('Failed to store audio BLOB from base64:', e);
   }
 }
 
@@ -50,6 +48,7 @@ export async function PUT(
 ) {
   try {
     const body = await request.json();
+    const { audio_base64, ...episodeData } = body;
 
     await db.execute({
       sql: `UPDATE episodes SET
@@ -67,23 +66,23 @@ export async function PUT(
         updated_at = CURRENT_TIMESTAMP
       WHERE id = ?`,
       args: [
-        body.episode_number,
-        body.title,
-        body.guest || null,
-        body.description || null,
-        body.transcript || null,
-        body.cover_image || null,
-        body.duration || null,
-        body.publish_date || null,
-        body.link_xiaoyuzhou || null,
-        body.link_apple_podcasts || null,
-        body.audio_url || null,
+        episodeData.episode_number,
+        episodeData.title,
+        episodeData.guest || null,
+        episodeData.description || null,
+        episodeData.transcript || null,
+        episodeData.cover_image || null,
+        episodeData.duration || null,
+        episodeData.publish_date || null,
+        episodeData.link_xiaoyuzhou || null,
+        episodeData.link_apple_podcasts || null,
+        episodeData.audio_url || null,
         params.id,
       ],
     });
 
-    // 将本地音频文件存入 BLOB 列
-    await storeAudioBlob(Number(params.id), body.audio_url || null);
+    // 将 base64 音频数据解码存入 BLOB 列
+    await storeAudioFromBase64(Number(params.id), audio_base64 || null);
 
     const updated = await db.execute({
       sql: 'SELECT * FROM episodes WHERE id = ?',

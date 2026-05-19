@@ -28,6 +28,7 @@ export default function EpisodeForm({ episode }: EpisodeFormProps) {
     link_xiaoyuzhou: episode?.link_xiaoyuzhou || '',
     link_apple_podcasts: episode?.link_apple_podcasts || '',
     audio_url: episode?.audio_url || '',
+    audio_base64: '',
   });
 
   const handleChange = (field: string, value: string) => {
@@ -47,9 +48,9 @@ export default function EpisodeForm({ episode }: EpisodeFormProps) {
     });
 
     if (res.ok) {
-      const { url } = await res.json();
-      setForm((prev) => ({ ...prev, cover_image: url }));
-      setCoverPreview(url);
+      const { dataUrl } = await res.json();
+      setForm((prev) => ({ ...prev, cover_image: dataUrl }));
+      setCoverPreview(dataUrl);
     } else {
       alert('图片上传失败');
     }
@@ -71,8 +72,9 @@ export default function EpisodeForm({ episode }: EpisodeFormProps) {
     });
 
     if (res.ok) {
-      const { url } = await res.json();
-      handleChange('audio_url', url);
+      const { base64 } = await res.json();
+      handleChange('audio_base64', base64);
+      handleChange('audio_url', '');
     } else {
       alert('音频上传失败');
       setAudioFileName('');
@@ -239,25 +241,30 @@ export default function EpisodeForm({ episode }: EpisodeFormProps) {
                   {audioUploading && ' (上传中...)'}
                 </span>
               )}
-              {form.audio_url && !audioUploading && (
-                <span className="text-xs text-green-600">✓ 已上传</span>
+              {form.audio_base64 && !audioUploading && (
+                <span className="text-xs text-green-600">✓ 已上传（将存入数据库）</span>
               )}
             </div>
             {/* URL 直接输入（备用） */}
             <div>
               <label className="block text-xs text-stone-400 mb-1">
-                或直接填写音频 URL
+                或直接填写音频 URL（外部托管）
               </label>
               <input
                 type="url"
                 value={form.audio_url}
-                onChange={(e) => handleChange('audio_url', e.target.value)}
+                onChange={(e) => {
+                  handleChange('audio_url', e.target.value);
+                  if (e.target.value) handleChange('audio_base64', '');
+                }}
                 placeholder="https://example.com/episode.mp3"
                 className="w-full px-4 py-2.5 border border-stone-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent/50"
               />
             </div>
           </div>
-          <p className="mt-1 text-xs text-stone-400">上传后可在网站内直接播放；暂不支持也会保留 URL 手动填入的方式</p>
+          <p className="mt-1 text-xs text-stone-400">
+            上传文件直接存入数据库；填写外部 URL 则使用远程托管
+          </p>
         </div>
       </div>
 
