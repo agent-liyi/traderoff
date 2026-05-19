@@ -27,9 +27,7 @@ jobs:
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          known_hosts: |
-            192.144.130.81 ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDoKvHPnuMaf/UkGqG2vSJC8ogWt+iWtd+UvbJa2EkM5
+          password: ${{ secrets.SSH_PASSWORD }}
           script: |
             set -e
             cd /app/podcast-site
