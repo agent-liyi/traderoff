@@ -28,6 +28,7 @@ jobs:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
+          fingerprint: SHA256:3xJea3kZZ7jy0k9HiAGhoWtDWBLdWUUq9ZEALzD/X6I
           script: |
             cd /app/podcast-site
             git fetch origin
