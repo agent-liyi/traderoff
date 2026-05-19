@@ -24,11 +24,15 @@ export async function POST(request: NextRequest) {
 
     const filePath = path.join(uploadDir, filename);
 
-    // 流式写入，不把整个文件加载到内存
+    // 流式写入磁盘
     const readable = Readable.fromWeb(file.stream() as any);
     await pipeline(readable, createWriteStream(filePath));
 
-    return NextResponse.json({ url: `/uploads/${filename}` });
+    return NextResponse.json({
+      url: `/uploads/${filename}`,
+      filename: file.name,
+      size: file.size,
+    });
   } catch (error) {
     console.error('Upload failed:', error);
     return NextResponse.json({ error: 'Upload failed' }, { status: 500 });

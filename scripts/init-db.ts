@@ -35,10 +35,19 @@ async function main() {
       link_xiaoyuzhou TEXT,
       link_apple_podcasts TEXT,
       audio_url TEXT,
+      audio_data BLOB,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     )
   `);
+
+  // 兼容旧表：如果 audio_data 列不存在则添加
+  try {
+    await db.execute(`ALTER TABLE episodes ADD COLUMN audio_data BLOB`);
+    console.log('   ➕ 已添加 audio_data BLOB 列');
+  } catch {
+    // 列已存在，忽略
+  }
 
   console.log('✅ Database initialized successfully');
   console.log(`   URL: ${process.env.TURSO_DATABASE_URL || 'file:./data/podcast.db'}`);

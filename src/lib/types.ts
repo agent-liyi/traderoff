@@ -11,6 +11,12 @@ export interface Episode {
   link_xiaoyuzhou: string | null;
   link_apple_podcasts: string | null;
   audio_url: string | null;
+  audio_data: number[] | null;
   created_at: string;
   updated_at: string;
+}
+
+/** 判断节目是否在数据库中有音频二进制数据 */
+export function hasDbAudio(episode: Episode): boolean {
+  return !!(episode.audio_data && episode.audio_data.length > 0);
 }

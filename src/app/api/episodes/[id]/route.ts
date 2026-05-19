@@ -1,6 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { readFileSync } from 'fs';
+import path from 'path';
 import db from '@/lib/db';
 import { Episode } from '@/lib/types';
+
+/** 如果 audio_url 指向本地文件，读入并作为 BLOB 存入 DB */
+async function storeAudioBlob(episodeId: number, audioUrl: string | null) {
+  if (!audioUrl || !audioUrl.startsWith('/uploads/')) return;
+  try {
+    const filePath = path.join(process.cwd(), 'public', audioUrl);
+    const buffer = readFileSync(filePath);
+    await db.execute({
+      sql: 'UPDATE episodes SET audio_data = ? WHERE id = ?',
+      args: [buffer, episodeId],
+    });
+  } catch (e) {
+    console.error('Failed to store audio BLOB:', e);
+  }
+}
 
 export async function GET(
   request: NextRequest,
@@ -64,6 +81,9 @@ export async function PUT(
         params.id,
       ],
     });
+
+    // 将本地音频文件存入 BLOB 列
+    await storeAudioBlob(Number(params.id), body.audio_url || null);
 
     const updated = await db.execute({
       sql: 'SELECT * FROM episodes WHERE id = ?',

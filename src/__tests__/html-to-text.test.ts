@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { htmlToText, htmlToExcerpt } from '@/lib/html-to-text';
+import { hasDbAudio } from '@/lib/types';
 
 describe('htmlToText', () => {
   it('should return empty string for falsy input', () => {
@@ -96,5 +97,27 @@ describe('htmlToExcerpt', () => {
     const result = htmlToExcerpt(input, 20);
     expect(result).toBe('Hello World');
     expect(result).not.toContain('<');
+  });
+});
+
+describe('hasDbAudio', () => {
+  const baseEpisode = {
+    id: 1, episode_number: 'S1E01', title: 'test', guest: null,
+    description: null, transcript: null, cover_image: null, duration: null,
+    publish_date: null, link_xiaoyuzhou: null, link_apple_podcasts: null,
+    audio_url: null, audio_data: null as number[] | null,
+    created_at: '', updated_at: '',
+  };
+
+  it('有音频数据时返回 true', () => {
+    expect(hasDbAudio({ ...baseEpisode, audio_data: [1, 2, 3] })).toBe(true);
+  });
+
+  it('audio_data 为 null 返回 false', () => {
+    expect(hasDbAudio({ ...baseEpisode, audio_data: null })).toBe(false);
+  });
+
+  it('audio_data 为空数组返回 false', () => {
+    expect(hasDbAudio({ ...baseEpisode, audio_data: [] })).toBe(false);
   });
 });

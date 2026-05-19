@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Episode } from '@/lib/types';
+import { Episode, hasDbAudio } from '@/lib/types';
 import { notFound } from 'next/navigation';
 import db from '@/lib/db';
 import { htmlToExcerpt } from '@/lib/html-to-text';
@@ -226,13 +226,13 @@ export default async function EpisodePage({
 
         {/* Links */}
         <div className="flex flex-wrap gap-3 mb-10">
-          {episode.audio_url && (
+          {(episode.audio_url || hasDbAudio(episode)) && (
             <PlayButton
               episode={{
                 id: episode.id,
                 title: episode.title,
                 episodeNumber: episode.episode_number,
-                audioUrl: episode.audio_url,
+                audioUrl: hasDbAudio(episode) ? `/api/audio/${episode.id}` : episode.audio_url!,
               }}
               variant="detail"
             />

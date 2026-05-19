@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import type { Metadata } from 'next';
-import { Episode } from '@/lib/types';
+import { Episode, hasDbAudio } from '@/lib/types';
 import db from '@/lib/db';
 import PlayButton from '@/components/PlayButton';
 
@@ -119,13 +119,13 @@ export default async function HomePage() {
                       {episode.episode_number}
                     </div>
                   )}
-                  {episode.audio_url && (
+                  {(episode.audio_url || hasDbAudio(episode)) && (
                     <PlayButton
                       episode={{
                         id: episode.id,
                         title: episode.title,
                         episodeNumber: episode.episode_number,
-                        audioUrl: episode.audio_url,
+                        audioUrl: hasDbAudio(episode) ? `/api/audio/${episode.id}` : episode.audio_url!,
                       }}
                       variant="hero"
                     />
@@ -175,13 +175,13 @@ export default async function HomePage() {
                 <div className="flex items-center gap-3 sm:gap-4 text-sm text-muted shrink-0 flex-wrap">
                   <span className="hidden sm:inline">{episode.publish_date}</span>
                   <span>{episode.duration}</span>
-                  {episode.audio_url ? (
+                  {episode.audio_url || hasDbAudio(episode) ? (
                     <PlayButton
                       episode={{
                         id: episode.id,
                         title: episode.title,
                         episodeNumber: episode.episode_number,
-                        audioUrl: episode.audio_url,
+                        audioUrl: hasDbAudio(episode) ? `/api/audio/${episode.id}` : episode.audio_url!,
                       }}
                       variant="list"
                     />
