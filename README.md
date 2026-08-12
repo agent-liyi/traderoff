@@ -1,5 +1,7 @@
 # Traderoff
 
+[English](README.md) | [简体中文](README.zh-CN.md)
+
 A-share market sentiment dashboard backed directly by Tushare Pro. It combines a five-factor fear and greed index with major-market performance tracking.
 
 ## Features
