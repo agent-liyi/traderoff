@@ -28,9 +28,22 @@
    docker compose up -d --build
    ```
 
-4. 在浏览器访问 `http://localhost:8788`。
+4. 在浏览器访问 `https://localhost`。Caddy 监听标准 HTTP/HTTPS 端口（`80`、`443`），并自动将 HTTP 请求跳转到 HTTPS。
 
 首次启动时会从 Tushare 获取计算所需的历史序列，并写入 `data/`。该目录通过卷挂载保留，因此后续启动可以复用数据缓存。
+
+## HTTPS 与公网部署
+
+Compose 使用 Caddy 作为对外反向代理。应用容器只在 Docker 内部网络监听，Caddy 对外发布标准端口 `80` 和 `443`。
+
+公网部署时，在 `.env` 中设置 `TRADEROFF_DOMAIN`，将该域名的 A/AAAA 记录解析到服务器，并在防火墙或安全组中开放 TCP `80` 与 `443`。Caddy 会自动申请和续期 TLS 证书，并将 HTTP 自动跳转到 HTTPS：
+
+```text
+TRADEROFF_DOMAIN=traderoff.example.com
+WECHAT_REDIRECT_URI=https://traderoff.example.com/api/auth/wechat/callback
+```
+
+本地开发可保留 `TRADEROFF_DOMAIN=localhost`，通过 `https://localhost` 访问。首次访问时，浏览器可能要求信任 Caddy 的本地开发证书。
 
 ## 微信登录
 

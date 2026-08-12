@@ -28,9 +28,22 @@ A-share market sentiment dashboard backed directly by Tushare Pro. It combines a
    docker compose up -d --build
    ```
 
-4. Open `http://localhost:8788`.
+4. Open `https://localhost`. Caddy listens on standard HTTP/HTTPS ports (`80` and `443`) and redirects HTTP traffic to HTTPS.
 
 The initial refresh fetches the required historical series from Tushare and writes runtime files to `data/`. The directory is mounted so subsequent starts reuse the data cache.
+
+## HTTPS And Public Deployment
+
+The Compose stack uses Caddy as the public reverse proxy. The dashboard itself remains private on the Docker network, while Caddy publishes standard ports `80` and `443`.
+
+For a public deployment, set `TRADEROFF_DOMAIN` in `.env`, point that domain's A/AAAA record at the server, and allow inbound TCP ports `80` and `443`. Caddy then obtains and renews the TLS certificate automatically and redirects HTTP requests to HTTPS:
+
+```text
+TRADEROFF_DOMAIN=traderoff.example.com
+WECHAT_REDIRECT_URI=https://traderoff.example.com/api/auth/wechat/callback
+```
+
+For local development, retain `TRADEROFF_DOMAIN=localhost` and open `https://localhost`. Your browser may ask you to trust Caddy's local development certificate on first use.
 
 ## WeChat Login
 

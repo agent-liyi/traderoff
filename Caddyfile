@@ -1,0 +1,3 @@
+{$TRADEROFF_DOMAIN:localhost} {
+  reverse_proxy traderoff:8788
+}

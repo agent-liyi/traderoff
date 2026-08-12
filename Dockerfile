@@ -13,6 +13,7 @@ WORKDIR /app/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci --omit=dev
 COPY web/server.js ./
+COPY web/tests ./tests
 COPY web/static ./static
 COPY notebooks/update_fear_greed_tushare.py /app/notebooks/update_fear_greed_tushare.py
 COPY notebooks/update_market_environment_tushare.py /app/notebooks/update_market_environment_tushare.py
