@@ -1,0 +1,13 @@
+# Environment and runtime secrets
+.env
+
+# Runtime data and user database
+data/*
+!data/.gitkeep
+web/data/*.sqlite*
+
+# Dependencies and build artifacts
+web/node_modules/
+__pycache__/
+*.pyc
+.DS_Store

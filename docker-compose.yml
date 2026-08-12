@@ -1,0 +1,17 @@
+services:
+  traderoff:
+    build: .
+    container_name: traderoff
+    ports:
+      - "8788:8788"
+    volumes:
+      - ./data:/app/data
+      - ./web/data:/app/web/data
+    environment:
+      WECHAT_AUTH_MODE: ${WECHAT_AUTH_MODE:-development}
+      WECHAT_APP_ID: ${WECHAT_APP_ID:-}
+      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
+      WECHAT_REDIRECT_URI: ${WECHAT_REDIRECT_URI:-http://localhost:8788/api/auth/wechat/callback}
+      TUSHARE_TOKEN: ${TUSHARE_TOKEN}
+      MARKET_ENVIRONMENT_DATA: /app/data/market_environment_runtime.json
+    restart: unless-stopped

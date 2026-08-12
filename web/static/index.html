@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="A股 · 市场情绪温度计与五项市场情绪指标看板">
+  <title>A股 · 市场情绪温度计</title>
+  <link rel="stylesheet" href="/styles.css?v=9">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#dashboard" aria-label="A股 · 市场情绪温度计首页">
+      <img class="brand-logo" src="/assets/traderoff-logo.png" alt="A股市场情绪温度计">
+      <span><strong>A股 · 市场情绪温度计</strong><small>MARKET SENTIMENT</small></span>
+    </a>
+    <div class="header-actions">
+      <span class="market-status"><i></i> 数据已更新 <b id="headerDate">--</b></span>
+
+      <button class="auth-button" id="authButton"><i data-lucide="scan-line"></i><span>微信登录</span></button>
+      <div class="user-menu hidden" id="userMenu">
+        <button class="user-trigger" id="userTrigger"><span id="userInitial">U</span><b id="userName">账户</b><i data-lucide="chevron-down"></i></button>
+        <button class="logout-button" id="logoutButton"><i data-lucide="log-out"></i>退出登录</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <nav class="view-tabs" aria-label="市场看板">
+      <button class="active" data-view="sentiment">市场情绪</button>
+      <button data-view="environment">市场环境</button>
+    </nav>
+
+    <div id="sentimentView">
+    <section class="dashboard-head" id="dashboard">
+      <div>
+        <h1>今天的市场情绪怎么样？</h1>
+        <p class="intro">五项市场指标经滚动 250 个交易日百分位映射，等权合成为 0–100 的情绪指数。</p>
+      </div>
+      <div class="range-control" role="group" aria-label="图表时间范围">
+        <button data-range="6m">6个月</button>
+        <button class="active" data-range="1y">1年</button>
+        <button data-range="3y">3年</button>
+        <button data-range="all">全部</button>
+      </div>
+    </section>
+
+    <section class="hero-grid">
+      <article class="index-panel">
+        <div class="panel-title"><span>当前指数</span><button class="icon-button" id="refreshButton" title="刷新数据" aria-label="刷新数据"><i data-lucide="refresh-cw"></i></button></div>
+        <div id="gaugeChart" class="gauge-chart" aria-label="恐慌贪婪指数仪表盘"></div>
+        <div class="index-summary">
+          <strong id="indexZone">--</strong>
+          <span id="indexChange">--</span>
+        </div>
+        <div class="zone-scale" aria-label="指数分区">
+          <span>极度恐惧</span><span>恐惧</span><span>中性</span><span>贪婪</span><span>极度贪婪</span>
+        </div>
+      </article>
+
+      <article class="trend-panel">
+        <div class="panel-title">
+          <div><span>市场情绪温度计与上证指数走势</span><small id="dateRange">--</small></div>
+          <div class="legend-group"><div class="legend"><i></i>恐慌贪婪指数</div><div class="legend shanghai"><i></i>上证指数</div></div>
+        </div>
+        <div id="mainChart" class="main-chart" aria-label="恐慌贪婪指数与上证指数历史走势"></div>
+        <div class="chart-footer"><span>数据来源：Tushare Pro</span><span>肥尾不肥</span></div>
+      </article>
+    </section>
+
+    <section class="indicator-section">
+      <div class="section-heading">
+        <div><p class="eyebrow">COMPONENTS</p><h2>五项情绪指标</h2></div>
+        <p>卡片和详情图直接展示五项指标原始值；历史百分位仅用于综合指数计算。</p>
+      </div>
+      <div class="indicator-preview" id="indicatorPreview">
+        <div class="indicator-gate" id="indicatorGate">
+          <p>登录后查看五项情绪指标的原始值与历史走势。</p>
+          <button class="gate-button" id="indicatorsLogin"><i data-lucide="lock-keyhole"></i>登录查看</button>
+        </div>
+        <div class="indicator-grid" id="indicatorGrid"></div>
+      </div>
+    </section>
+    </div>
+
+    <section class="environment-view hidden" id="environmentView">
+      <header class="environment-head">
+        <div><h1>市场环境追踪</h1><p class="intro">主要市场指数区间表现 · 数据截至 <b id="environmentDate">--</b></p></div>
+        <button class="icon-button" id="environmentRefresh" title="刷新数据" aria-label="刷新市场环境数据"><i data-lucide="refresh-cw"></i></button>
+      </header>
+      <div class="environment-table-wrap">
+        <table class="environment-table">
+          <thead><tr><th>市场</th><th>指数</th><th>最近一周</th><th>近一个月</th><th>今年以来</th><th>最近一年</th><th>数据日期</th><th>近一周走势</th></tr></thead>
+          <tbody id="environmentRows"><tr><td colspan="8" class="table-loading">正在加载市场数据...</td></tr></tbody>
+        </table>
+        <footer><span>数据来源：Tushare Pro · 价格指数收益率</span><span>肥尾不肥</span></footer>
+      </div>
+      <section class="environment-trend" aria-labelledby="environmentTrendTitle">
+        <div class="environment-trend-head">
+          <div><p class="eyebrow">250 TRADING DAYS</p><h2 id="environmentTrendTitle">主要指数走势</h2><p>以各指数250个交易日前的收盘价为基准，展示累计收益率。</p></div>
+          <div class="environment-group-control" role="group" aria-label="指数市场范围">
+            <button class="active" data-environment-group="A股">A股</button>
+            <button data-environment-group="港股">港股</button>
+            <button data-environment-group="美股">美股</button>
+          </div>
+        </div>
+        <div class="environment-trend-chart-wrap">
+          <div id="environmentTrendChart" class="environment-trend-chart" aria-label="各主要指数250个交易日累计收益率走势"></div>
+          <div class="chart-footer"><span id="environmentTrendDate">--</span><span>肥尾不肥</span></div>
+        </div>
+      </section>
+    </section>
+
+
+  </main>
+
+  <section class="detail-view hidden" id="detailView" aria-live="polite">
+    <header>
+      <button class="back-button" id="detailBack"><i data-lucide="arrow-left"></i>返回总览</button>
+      <span>指标详情</span>
+    </header>
+    <div class="detail-content">
+      <p class="eyebrow" id="detailDirection">--</p>
+      <h2 id="detailName">--</h2>
+      <p class="detail-description" id="detailDescription">--</p>
+      <div class="detail-stats">
+        <div><span>当前值</span><strong id="detailScore">--</strong></div>
+        <div><span>区间均值</span><strong id="detailAverage">--</strong></div>
+        <div><span>区间最低</span><strong id="detailMin">--</strong></div>
+        <div><span>区间最高</span><strong id="detailMax">--</strong></div>
+      </div>
+      <div class="detail-chart-wrap">
+        <div id="detailChart" class="detail-chart"></div>
+        <div class="chart-footer"><span id="detailSource">数据来源：--</span><span>肥尾不肥</span></div>
+      </div>
+    </div>
+  </section>
+
+  <dialog class="auth-dialog" id="authDialog">
+    <button class="dialog-close icon-button" id="dialogClose" aria-label="关闭"><i data-lucide="x"></i></button>
+    <div class="auth-copy"><span class="wechat-mark"><i data-lucide="message-circle-more"></i></span><h2>微信扫码登录</h2><p>使用微信身份验证，首次登录会自动创建账户。</p></div>
+    <p class="form-error" id="formError"></p>
+    <a class="wechat-login-button" href="/api/auth/wechat"><i data-lucide="scan-line"></i><span>打开微信验证</span></a>
+    <p class="auth-privacy">登录即表示你同意仅将微信公开资料用于账户识别。</p>
+  </dialog>
+
+  <script src="/vendor/echarts.min.js"></script>
+  <script src="/vendor/lucide.min.js"></script>
+  <script type="module" src="/app.js?v=13"></script></script></script></script>
+</body>
+</html>
