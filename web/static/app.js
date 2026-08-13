@@ -3,6 +3,7 @@ const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const palette = { qvix: '#5AAEF3', strength: '#333333', futures: '#E65A56', volume: '#6D61E4', safety: '#30CB13' };
 const environmentPalette = ['#1F77B4', '#E15759', '#2C8C6B', '#F28E2B', '#6B5FB5', '#A05D3A', '#C6A016', '#40484F'];
+const styleTrendPalette = ['#1F77B4', '#E15759', '#2C8C6B', '#F28E2B', '#6B5FB5', '#A05D3A'];
 const industryTrendPalette = ['#5AAEF3', '#E65A56', '#2C8C6B', '#FF974C', '#6D61E4', '#C6A016', '#2D5B85', '#A05D3A', '#8E6F52', '#40484F', '#30CB13', '#D05A78'];
 const volumePalette = ['#E65A56', '#F28E2B', '#5AAEF3', '#2C8C6B', '#6D61E4'];
 const volatilityPalette = ['#1F77B4', '#F28E2B', '#73777B', '#C6A016', '#6D61E4'];
