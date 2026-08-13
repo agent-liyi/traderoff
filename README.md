@@ -4,6 +4,8 @@
 
 A-share market sentiment dashboard backed directly by Tushare Pro. It combines a five-factor fear and greed index with major-market performance tracking.
 
+For production HTTPS deployment, low-memory server recovery, and verification commands, see the [production deployment guide](docs/production-deployment.md).
+
 ## Features
 
 - Five-factor A-share sentiment index: QVIX, price strength, IF futures basis, volume deviation, and stock-bond safety demand.
@@ -30,7 +32,7 @@ A-share market sentiment dashboard backed directly by Tushare Pro. It combines a
 
 4. Open `https://localhost`. Caddy listens on standard HTTP/HTTPS ports (`80` and `443`) and redirects HTTP traffic to HTTPS.
 
-The initial refresh fetches the required historical series from Tushare and writes runtime files to `data/`. The directory is mounted so subsequent starts reuse the data cache.
+The initial refresh fetches the required historical series from Tushare and writes runtime files to `data/`. The directory is mounted so subsequent starts reuse the data cache. See the [production deployment guide](docs/production-deployment.md) for the low-memory server recovery procedure and verification commands.
 
 ## HTTPS And Public Deployment
 

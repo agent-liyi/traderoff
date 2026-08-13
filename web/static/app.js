@@ -1,8 +1,12 @@
-const state = { range: '1y', data: null, environment: null, environmentGroup: 'A股', charts: [], environmentTrendChart: null, user: null };
+const state = { range: '1y', data: null, environment: null, style: null, industry: null, volume: null, volatility: null, turnover: null, breadth: null, environmentGroup: 'A股', breadthGroup: 'ALL_A', charts: [], environmentTrendChart: null, styleTrendChart: null, industryTrendChart: null, volumeAmountChart: null, volumeShareChart: null, indexVolatilityChart: null, crossVolatilityChart: null, turnoverChart: null, breadthChart: null, user: null };
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const palette = { qvix: '#5AAEF3', strength: '#333333', futures: '#E65A56', volume: '#6D61E4', safety: '#30CB13' };
 const environmentPalette = ['#1F77B4', '#E15759', '#2C8C6B', '#F28E2B', '#6B5FB5', '#A05D3A', '#C6A016', '#40484F'];
+const industryTrendPalette = ['#5AAEF3', '#E65A56', '#2C8C6B', '#FF974C', '#6D61E4', '#C6A016', '#2D5B85', '#A05D3A', '#8E6F52', '#40484F', '#30CB13', '#D05A78'];
+const volumePalette = ['#E65A56', '#F28E2B', '#5AAEF3', '#2C8C6B', '#6D61E4'];
+const volatilityPalette = ['#1F77B4', '#F28E2B', '#73777B', '#C6A016', '#6D61E4'];
+const turnoverPalette = ['#1F77B4', '#F28E2B', '#73777B', '#C6A016', '#6D61E4', '#2C8C6B'];
 const score = (value) => Number(value).toFixed(1);
 const change = (value) => `${value >= 0 ? '+' : ''}${Number(value).toFixed(1)}`;
 const indicatorValue = (value, item) => `${Number(value).toFixed(item.precision)}${item.unit}`;
@@ -31,6 +35,48 @@ async function loadEnvironment() {
   if (!response.ok) throw new Error('市场环境数据加载失败');
   state.environment = await response.json();
   renderEnvironment();
+}
+
+async function loadStyle() {
+  const response = await fetch('/api/market-style');
+  if (!response.ok) throw new Error('市场风格指数数据加载失败');
+  state.style = await response.json();
+  renderStyle();
+}
+
+async function loadIndustry() {
+  const response = await fetch('/api/industry-price');
+  if (!response.ok) throw new Error('行业价格指数数据加载失败');
+  state.industry = await response.json();
+  renderIndustry();
+}
+
+async function loadVolume() {
+  const response = await fetch('/api/market-volume');
+  if (!response.ok) throw new Error('市场成交量数据加载失败');
+  state.volume = await response.json();
+  renderVolume();
+}
+
+async function loadVolatility() {
+  const response = await fetch('/api/market-volatility');
+  if (!response.ok) throw new Error('市场波动率数据加载失败');
+  state.volatility = await response.json();
+  renderVolatility();
+}
+
+async function loadTurnover() {
+  const response = await fetch('/api/market-turnover');
+  if (!response.ok) throw new Error('市场换手率数据加载失败');
+  state.turnover = await response.json();
+  renderTurnover();
+}
+
+async function loadBreadth() {
+  const response = await fetch('/api/market-breadth');
+  if (!response.ok) throw new Error('成分股涨跌分布数据加载失败');
+  state.breadth = await response.json();
+  renderBreadth();
 }
 
 function percent(value) {
@@ -68,6 +114,267 @@ function renderEnvironment() {
     </tr>`;
   }).join('');
   renderEnvironmentTrend();
+}
+
+function renderStyle() {
+  $('#styleDate').textContent = state.style.asOf;
+  let previousGroup = '';
+  $('#styleRows').innerHTML = state.style.indices.map((item) => {
+    const groupClass = previousGroup && previousGroup !== item.group ? ' group-start' : '';
+    previousGroup = item.group;
+    return `<tr class="${groupClass.trim()}" title="${item.name}数据截至 ${item.date}">
+      <th scope="row"><strong>${item.name}</strong><small>${item.group} · ${item.code}</small></th>
+      ${returnCell(item.week)}${returnCell(item.month)}${returnCell(item.ytd)}${returnCell(item.year)}
+      <td class="sparkline">${sparkline(item.sparkline, item.week >= 0)}</td>
+    </tr>`;
+  }).join('');
+  renderStyleTrend();
+}
+
+function renderStyleTrend() {
+  const items = state.style.indices.filter((item) => item.group !== '全市场');
+  if (items.length !== 6) return;
+  state.styleTrendChart?.dispose();
+  const chart = echarts.init($('#styleTrendChart'), null, { renderer: 'canvas' });
+  state.styleTrendChart = chart;
+  const dates = [...new Set(items.flatMap((item) => item.history.map((point) => point.date)))].sort();
+  const compact = window.innerWidth <= 760;
+  const monthStart = (index) => index === 0 || dates[index].slice(0, 7) !== dates[index - 1].slice(0, 7);
+  $('#styleTrendDate').textContent = `250个交易日 · ${dates[0]} — ${dates.at(-1)} · 数据来源：Tushare Pro`;
+  chart.setOption({
+    animationDuration: 650,
+    color: styleTrendPalette,
+    tooltip: {
+      trigger: 'axis', backgroundColor: '#fff', borderColor: '#ccc', textStyle: { color: '#222', fontSize: 11 },
+      formatter: (rows) => `${rows[0].axisValue}<br>${rows.filter((row) => row.value !== '-').map((row) => `${row.marker}${row.seriesName} <b>${Number(row.value).toFixed(2)}%</b>`).join('<br>')}`
+    },
+    legend: compact
+      ? { data: items.map((item) => item.name), type: 'scroll', top: 10, left: 48, right: 18, itemWidth: 16, itemHeight: 3, itemGap: 12, textStyle: { color: '#555', fontSize: 10 } }
+      : { data: items.map((item) => item.name), type: 'scroll', orient: 'vertical', right: 16, top: 'center', itemWidth: 16, itemHeight: 3, itemGap: 13, textStyle: { color: '#555', fontSize: 10 } },
+    grid: { left: 58, right: compact ? 20 : 150, top: compact ? 52 : 28, bottom: 42 },
+    xAxis: { type: 'category', boundaryGap: false, data: dates, ...axisStyle(), axisLabel: { color: '#73777b', fontSize: 10, hideOverlap: true, formatter: (value, index) => monthStart(index) ? `${value.slice(5, 7)}月` : '' } },
+    yAxis: { type: 'value', name: '累计收益率', nameTextStyle: { color: '#73777b', fontSize: 10 }, axisLabel: { color: '#73777b', fontSize: 10, formatter: (value) => `${Number(value).toFixed(0)}%` }, axisLine: { lineStyle: { color: '#999' } }, axisTick: { show: false }, splitLine: { show: true, lineStyle: { color: '#ddd', type: 'dashed' } } },
+    dataZoom: [{ type: 'inside' }],
+    series: items.map((item) => {
+      const baseline = Number(item.history[0].close);
+      const values = new Map(item.history.map((point) => [point.date, (Number(point.close) / baseline - 1) * 100]));
+      return { name: item.name, type: 'line', data: dates.map((date) => values.has(date) ? values.get(date) : '-'), showSymbol: false, smooth: .13, lineStyle: { width: 2.2 }, emphasis: { focus: 'series', lineStyle: { width: 3.4 } } };
+    }).concat([{ name: '0%基准', type: 'line', data: dates.map(() => 0), showSymbol: false, silent: true, tooltip: { show: false }, lineStyle: { color: '#92979b', width: 1, type: 'dashed' }, z: 0 }])
+  });
+}
+
+function renderIndustry() {
+  $('#industryDate').textContent = state.industry.asOf;
+  const items = [...state.industry.indices].sort((left, right) => Number(right.week) - Number(left.week));
+  const maxAmount = Math.max(...items.map((item) => Number(item.amount)), 1);
+  $('#industryRows').innerHTML = items.map((item) => `<tr title="${item.name}数据截至 ${item.date}">
+    <th scope="row"><strong>${item.name}</strong><small>${item.code}</small></th>
+    ${returnCell(item.week)}${returnCell(item.month)}${returnCell(item.ytd)}${returnCell(item.year)}
+    <td class="amount-cell" style="--amount-bar:${Math.max(Number(item.amount) / maxAmount * 100, 1)}%"><span>${Number(item.amount).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span><small>亿元</small></td>
+    <td class="sparkline">${sparkline(item.sparkline, item.week >= 0)}</td>
+  </tr>`).join('');
+  renderIndustryTrend(items);
+}
+
+function renderIndustryTrend(items) {
+  state.industryTrendChart?.dispose();
+  const chart = echarts.init($('#industryTrendChart'), null, { renderer: 'canvas' });
+  state.industryTrendChart = chart;
+  const dates = [...new Set(items.flatMap((item) => item.history.map((point) => point.date)))].sort();
+  const compact = window.innerWidth <= 760;
+  const monthStart = (index) => index === 0 || dates[index].slice(0, 7) !== dates[index - 1].slice(0, 7);
+  $('#industryTrendDate').textContent = `250个交易日 · ${dates[0]} — ${dates.at(-1)} · 数据来源：Tushare Pro`;
+  chart.setOption({
+    animationDuration: 650,
+    color: industryTrendPalette,
+    tooltip: {
+      trigger: 'axis', backgroundColor: '#fff', borderColor: '#ccc', textStyle: { color: '#222', fontSize: 11 },
+      formatter: (rows) => `${rows[0].axisValue}<br>${rows.filter((row) => row.value !== '-').map((row) => `${row.marker}${row.seriesName} <b>${Number(row.value).toFixed(2)}%</b>`).join('<br>')}`
+    },
+    legend: compact
+      ? { type: 'scroll', top: 10, left: 48, right: 18, itemWidth: 14, itemHeight: 3, itemGap: 11, textStyle: { color: '#555', fontSize: 10 } }
+      : { type: 'scroll', orient: 'vertical', right: 14, top: 'center', itemWidth: 14, itemHeight: 3, itemGap: 10, textStyle: { color: '#555', fontSize: 10 } },
+    grid: { left: 58, right: compact ? 20 : 152, top: compact ? 52 : 28, bottom: 42 },
+    xAxis: { type: 'category', boundaryGap: false, data: dates, ...axisStyle(), axisLabel: { color: '#73777b', fontSize: 10, hideOverlap: true, formatter: (value, index) => monthStart(index) ? `${value.slice(5, 7)}月` : '' } },
+    yAxis: { type: 'value', name: '累计收益率', nameTextStyle: { color: '#73777b', fontSize: 10 }, axisLabel: { color: '#73777b', fontSize: 10, formatter: (value) => `${Number(value).toFixed(0)}%` }, axisLine: { lineStyle: { color: '#999' } }, axisTick: { show: false }, splitLine: { show: true, lineStyle: { color: '#ddd', type: 'dashed' } } },
+    dataZoom: [{ type: 'inside' }],
+    series: items.map((item) => {
+      const baseline = Number(item.history[0].close);
+      const values = new Map(item.history.map((point) => [point.date, (Number(point.close) / baseline - 1) * 100]));
+      return { name: item.name, type: 'line', data: dates.map((date) => values.has(date) ? values.get(date) : '-'), showSymbol: false, smooth: .12, lineStyle: { width: 1.8 }, emphasis: { focus: 'series', lineStyle: { width: 3 } } };
+    }).concat([{ name: '0%基准', type: 'line', data: dates.map(() => 0), showSymbol: false, silent: true, tooltip: { show: false }, lineStyle: { color: '#92979b', width: 1, type: 'dashed' }, z: 0 }])
+  });
+}
+
+function renderTurnover() {
+  const { indices, asOf } = state.turnover;
+  const maxValue = Math.max(...indices.map((item) => Number(item.current)), 1);
+  $('#turnoverDate').textContent = asOf;
+  $('#turnoverRows').innerHTML = indices.map((item) => `<tr>
+    <th scope="row"><strong>${item.name}</strong><small>${item.code}</small></th>
+    <td class="turnover-cell" style="--turnover-bar:${Math.max(Number(item.current) / maxValue * 100, 1)}%"><span>${Number(item.current).toFixed(2)}%</span></td>
+    <td>${Number(item.weekAverage).toFixed(2)}%</td>
+    <td>${Number(item.monthAverage).toFixed(2)}%</td>
+    ${percentileCell(item.percentile)}
+    <td class="sparkline">${turnoverSparkline(item.sparkline)}</td>
+  </tr>`).join('');
+  renderTurnoverTrend(indices);
+}
+
+function turnoverSparkline(points) {
+  const values = points.map((point) => Number(point.value));
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const span = max - min || 1;
+  const coordinates = values.map((value, index) => `${4 + index * 22},${30 - ((value - min) / span) * 24}`).join(' ');
+  return `<svg viewBox="0 0 96 36" role="img" aria-label="近五日换手率走势"><polyline points="${coordinates}" fill="none" stroke="#6D61E4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="92" cy="${coordinates.split(' ').at(-1).split(',')[1]}" r="2.5" fill="#6D61E4"/></svg>`;
+}
+
+function renderTurnoverTrend(items) {
+  state.turnoverChart?.dispose();
+  const chart = echarts.init($('#turnoverChart'), null, { renderer: 'canvas' });
+  state.turnoverChart = chart;
+  const dates = items[0].history.map((point) => point.date);
+  const compact = window.innerWidth <= 760;
+  const monthStart = (index) => index === 0 || dates[index].slice(0, 7) !== dates[index - 1].slice(0, 7);
+  $('#turnoverTrendDate').textContent = `250个交易日 · ${dates[0]} — ${dates.at(-1)} · 数据来源：Tushare Pro`;
+  chart.setOption({
+    animationDuration: 650, color: turnoverPalette,
+    tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#ccc', textStyle: { color: '#222', fontSize: 11 }, formatter: (rows) => `${rows[0].axisValue}<br>${rows.map((row) => `${row.marker}${row.seriesName} <b>${Number(row.value).toFixed(2)}%</b>`).join('<br>')}` },
+    legend: compact
+      ? { data: items.map((item) => item.name), type: 'scroll', top: 10, left: 48, right: 18, itemWidth: 15, itemHeight: 3, itemGap: 10, textStyle: { color: '#555', fontSize: 10 } }
+      : { data: items.map((item) => item.name), type: 'scroll', orient: 'vertical', right: 14, top: 'center', itemWidth: 15, itemHeight: 3, itemGap: 12, textStyle: { color: '#555', fontSize: 10 } },
+    grid: { left: 58, right: compact ? 20 : 145, top: compact ? 52 : 28, bottom: 42 },
+    xAxis: { type: 'category', boundaryGap: false, data: dates, ...axisStyle(), axisLabel: { color: '#73777b', fontSize: 10, hideOverlap: true, formatter: (value, index) => monthStart(index) ? `${value.slice(5, 7)}月` : '' } },
+    yAxis: { type: 'value', name: '自由流通换手率', nameTextStyle: { color: '#73777b', fontSize: 10 }, axisLabel: { color: '#73777b', fontSize: 10, formatter: (value) => `${Number(value).toFixed(1)}%` }, axisLine: { lineStyle: { color: '#999' } }, axisTick: { show: false }, splitLine: { show: true, lineStyle: { color: '#ddd', type: 'dashed' } } },
+    dataZoom: [{ type: 'inside' }],
+    series: items.map((item) => ({ name: item.name, type: 'line', data: item.history.map((point) => point.value), showSymbol: false, smooth: .14, lineStyle: { width: 2.1 }, emphasis: { focus: 'series', lineStyle: { width: 3.3 } } }))
+  });
+}
+
+function renderBreadth() {
+  const group = state.breadth.groups.find((item) => item.code === state.breadthGroup) || state.breadth.groups[0];
+  const { asOf } = state.breadth;
+  $('#breadthDate').textContent = asOf;
+  $('#breadthTrendTitle').textContent = `${group.name}个股涨跌幅度分布（共${group.count.toLocaleString('zh-CN')}只）`;
+  $('#breadthDescription').textContent = `上涨 ${group.rise.toLocaleString('zh-CN')} 只 · 平盘 ${group.flat.toLocaleString('zh-CN')} 只 · 下跌 ${group.fall.toLocaleString('zh-CN')} 只 · 按2个百分点区间统计。`;
+  $('#breadthChartDate').textContent = `${asOf} · 数据来源：Tushare Pro · ${group.membershipSnapshot ? `成分股快照 ${group.membershipSnapshot}` : '沪深两市普通A股'}`;
+  state.breadthChart?.dispose();
+  const chart = echarts.init($('#breadthChart'), null, { renderer: 'canvas' });
+  state.breadthChart = chart;
+  const compact = window.innerWidth <= 760;
+  chart.setOption({
+    animationDuration: 500,
+    tooltip: {
+      trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: '#fff', borderColor: '#ccc', textStyle: { color: '#222', fontSize: 11 },
+      formatter: (rows) => { const count = Number(rows[0].value); return `${rows[0].axisValue}<br>${rows[0].marker}个股数量 <b>${count}</b> 只<br>占比 <b>${(count / group.count * 100).toFixed(2)}%</b>`; }
+    },
+    grid: { left: 58, right: 26, top: 28, bottom: compact ? 86 : 74 },
+    xAxis: {
+      type: 'category', data: group.distribution.map((item) => item.label), axisLine: { lineStyle: { color: '#999' } }, axisTick: { alignWithLabel: true, lineStyle: { color: '#999' } },
+      axisLabel: { color: '#73777b', fontSize: compact ? 8 : 9, interval: 0, rotate: 45, margin: 12 }, name: '涨跌幅区间', nameLocation: 'middle', nameGap: compact ? 64 : 56, nameTextStyle: { color: '#73777b', fontSize: 10 }
+    },
+    yAxis: { type: 'value', minInterval: 1, name: '个股数量', nameTextStyle: { color: '#73777b', fontSize: 10 }, axisLine: { lineStyle: { color: '#999' } }, axisTick: { show: false }, axisLabel: { color: '#73777b', fontSize: 10 }, splitLine: { show: true, lineStyle: { color: '#ddd', type: 'dashed' } } },
+    series: [{ name: '个股数量', type: 'bar', data: group.distribution.map((item) => item.count), barCategoryGap: '8%', itemStyle: { color: '#2D75B6' }, emphasis: { itemStyle: { color: '#1F5F97' } } }]
+  });
+}
+
+function renderVolatility() {
+  const data = state.volatility;
+  $('#volatilityDate').textContent = data.asOf;
+  renderVolatilityChart('#indexVolatilityChart', '#indexVolatilityDate', data.indexVolatility, `主要指数波动率（${data.indexWindow}日滚动年化）`, true);
+  renderVolatilityChart('#crossVolatilityChart', '#crossVolatilityDate', data.crossSectionVolatility, `成分股截面波动率（${data.crossSectionWindow}日移动平均）`, false);
+}
+
+function renderVolatilityChart(selector, dateSelector, items, title, annualized) {
+  const chartKey = selector === '#indexVolatilityChart' ? 'indexVolatilityChart' : 'crossVolatilityChart';
+  state[chartKey]?.dispose();
+  const chart = echarts.init($(selector), null, { renderer: 'canvas' });
+  state[chartKey] = chart;
+  const dates = items[0].history.map((point) => point.date);
+  const compact = window.innerWidth <= 760;
+  const monthStart = (index) => index === 0 || dates[index].slice(0, 7) !== dates[index - 1].slice(0, 7);
+  $(dateSelector).textContent = `250个交易日 · ${dates[0]} — ${dates.at(-1)} · 数据来源：Tushare Pro`;
+  chart.setOption({
+    animationDuration: 650, color: volatilityPalette,
+    tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#ccc', textStyle: { color: '#222', fontSize: 11 }, formatter: (rows) => `${rows[0].axisValue}<br>${rows.map((row) => `${row.marker}${row.seriesName} <b>${Number(row.value).toFixed(2)}%</b>`).join('<br>')}` },
+    legend: compact
+      ? { data: items.map((item) => item.name), type: 'scroll', top: 10, left: 48, right: 18, itemWidth: 15, itemHeight: 3, itemGap: 10, textStyle: { color: '#555', fontSize: 10 } }
+      : { data: items.map((item) => item.name), type: 'scroll', orient: 'vertical', right: 14, top: 'center', itemWidth: 15, itemHeight: 3, itemGap: 12, textStyle: { color: '#555', fontSize: 10 } },
+    grid: { left: 58, right: compact ? 20 : 145, top: compact ? 52 : 28, bottom: 42 },
+    xAxis: { type: 'category', boundaryGap: false, data: dates, ...axisStyle(), axisLabel: { color: '#73777b', fontSize: 10, hideOverlap: true, formatter: (value, index) => monthStart(index) ? `${value.slice(5, 7)}月` : '' } },
+    yAxis: { type: 'value', name: title, nameTextStyle: { color: '#73777b', fontSize: 10 }, axisLabel: { color: '#73777b', fontSize: 10, formatter: (value) => `${Number(value).toFixed(annualized ? 0 : 1)}%` }, axisLine: { lineStyle: { color: '#999' } }, axisTick: { show: false }, splitLine: { show: true, lineStyle: { color: '#ddd', type: 'dashed' } } },
+    dataZoom: [{ type: 'inside' }],
+    series: items.map((item) => ({ name: item.name, type: 'line', data: item.history.map((point) => point.value), showSymbol: false, smooth: .14, lineStyle: { width: 2.2 }, emphasis: { focus: 'series', lineStyle: { width: 3.4 } } }))
+  });
+}
+
+function renderVolume() {
+  const { buckets, history, asOf } = state.volume;
+  const maxAmount = Math.max(...buckets.map((item) => Number(item.amount)), 1);
+  $('#volumeDate').textContent = asOf;
+  $('#volumeRows').innerHTML = buckets.map((item) => `<tr>
+    <th scope="row"><strong>${item.name}</strong><small>${item.code === 'OTHER' ? '沪深两市其余股票' : item.code}</small></th>
+    <td class="amount-cell" style="--amount-bar:${Math.max(Number(item.amount) / maxAmount * 100, 1)}%"><span>${Number(item.amount).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</span><small>亿元</small></td>
+    ${percentileCell(item.amountPercentile)}
+    <td class="share-cell" style="--share-bar:${Math.max(Number(item.share), 1)}%"><span>${Number(item.share).toFixed(2)}%</span></td>
+    ${percentileCell(item.sharePercentile)}
+  </tr>`).join('');
+  renderVolumeAmountTrend(buckets, history);
+  renderVolumeShareTrend(buckets, history);
+}
+
+function percentileCell(value) {
+  return `<td class="percentile-cell" style="--percentile-bar:${Math.max(Number(value), 1)}%"><span>${Number(value).toFixed(1)}%</span></td>`;
+}
+
+function volumeChartMeta(history) {
+  const dates = history.map((row) => row.date);
+  const compact = window.innerWidth <= 760;
+  const monthStart = (index) => index === 0 || dates[index].slice(0, 7) !== dates[index - 1].slice(0, 7);
+  return { dates, compact, monthStart };
+}
+
+function volumeLegend(items, compact) {
+  return compact
+    ? { data: items.map((item) => item.name), type: 'scroll', top: 10, left: 48, right: 18, itemWidth: 15, itemHeight: 3, itemGap: 10, textStyle: { color: '#555', fontSize: 10 } }
+    : { data: items.map((item) => item.name), type: 'scroll', orient: 'vertical', right: 14, top: 'center', itemWidth: 15, itemHeight: 3, itemGap: 12, textStyle: { color: '#555', fontSize: 10 } };
+}
+
+function renderVolumeAmountTrend(items, history) {
+  state.volumeAmountChart?.dispose();
+  const chart = echarts.init($('#volumeAmountChart'), null, { renderer: 'canvas' });
+  state.volumeAmountChart = chart;
+  const { dates, compact, monthStart } = volumeChartMeta(history);
+  $('#volumeAmountDate').textContent = `250个交易日 · ${dates[0]} — ${dates.at(-1)} · 数据来源：Tushare Pro`;
+  chart.setOption({
+    animationDuration: 650, color: volumePalette,
+    tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#ccc', textStyle: { color: '#222', fontSize: 11 }, formatter: (rows) => `${rows[0].axisValue}<br>${rows.map((row) => `${row.marker}${row.seriesName} <b>${Number(row.value).toLocaleString('zh-CN', { maximumFractionDigits: 0 })}</b> 亿元`).join('<br>')}` },
+    legend: volumeLegend(items, compact),
+    grid: { left: 58, right: compact ? 20 : 145, top: compact ? 52 : 28, bottom: 42 },
+    xAxis: { type: 'category', boundaryGap: false, data: dates, ...axisStyle(), axisLabel: { color: '#73777b', fontSize: 10, hideOverlap: true, formatter: (value, index) => monthStart(index) ? `${value.slice(5, 7)}月` : '' } },
+    yAxis: { type: 'value', name: '亿元', nameTextStyle: { color: '#73777b', fontSize: 10 }, ...axisStyle() },
+    dataZoom: [{ type: 'inside' }],
+    series: items.map((item) => ({ name: item.name, type: 'line', stack: '成交额', data: history.map((row) => row.amounts[item.code]), showSymbol: false, smooth: .12, lineStyle: { width: 1.2 }, areaStyle: { opacity: .72 }, emphasis: { focus: 'series' } }))
+  });
+}
+
+function renderVolumeShareTrend(items, history) {
+  state.volumeShareChart?.dispose();
+  const chart = echarts.init($('#volumeShareChart'), null, { renderer: 'canvas' });
+  state.volumeShareChart = chart;
+  const { dates, compact, monthStart } = volumeChartMeta(history);
+  $('#volumeShareDate').textContent = `250个交易日 · ${dates[0]} — ${dates.at(-1)} · 数据来源：Tushare Pro`;
+  chart.setOption({
+    animationDuration: 650, color: volumePalette,
+    tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#ccc', textStyle: { color: '#222', fontSize: 11 }, formatter: (rows) => `${rows[0].axisValue}<br>${rows.map((row) => `${row.marker}${row.seriesName} <b>${Number(row.value).toFixed(2)}%</b>`).join('<br>')}` },
+    legend: volumeLegend(items, compact),
+    grid: { left: 58, right: compact ? 20 : 145, top: compact ? 52 : 28, bottom: 42 },
+    xAxis: { type: 'category', boundaryGap: false, data: dates, ...axisStyle(), axisLabel: { color: '#73777b', fontSize: 10, hideOverlap: true, formatter: (value, index) => monthStart(index) ? `${value.slice(5, 7)}月` : '' } },
+    yAxis: { type: 'value', min: 0, max: 50, name: '成交占比', nameTextStyle: { color: '#73777b', fontSize: 10 }, axisLabel: { color: '#73777b', fontSize: 10, formatter: (value) => `${value}%` }, axisLine: { lineStyle: { color: '#999' } }, axisTick: { show: false }, splitLine: { show: true, lineStyle: { color: '#ddd', type: 'dashed' } } },
+    dataZoom: [{ type: 'inside' }],
+    series: items.map((item) => ({ name: item.name, type: 'line', data: history.map((row) => row.shares[item.code]), showSymbol: false, smooth: .14, lineStyle: { width: 2 }, emphasis: { focus: 'series', lineStyle: { width: 3.2 } } }))
+  });
 }
 
 function renderEnvironmentTrend() {
@@ -108,8 +415,26 @@ async function switchView(view) {
   $$('.view-tabs button').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   $('#sentimentView').classList.toggle('hidden', view !== 'sentiment');
   $('#environmentView').classList.toggle('hidden', view !== 'environment');
+  $('#styleView').classList.toggle('hidden', view !== 'style');
+  $('#industryView').classList.toggle('hidden', view !== 'industry');
+  $('#volumeView').classList.toggle('hidden', view !== 'volume');
+  $('#volatilityView').classList.toggle('hidden', view !== 'volatility');
+  $('#turnoverView').classList.toggle('hidden', view !== 'turnover');
+  $('#breadthView').classList.toggle('hidden', view !== 'breadth');
   if (view === 'environment' && !state.environment) await loadEnvironment();
+  if (view === 'style' && !state.style) await loadStyle();
+  if (view === 'industry' && !state.industry) await loadIndustry();
+  if (view === 'volume' && !state.volume) await loadVolume();
+  if (view === 'volatility' && !state.volatility) await loadVolatility();
+  if (view === 'turnover' && !state.turnover) await loadTurnover();
+  if (view === 'breadth' && !state.breadth) await loadBreadth();
   if (view === 'environment') requestAnimationFrame(() => state.environmentTrendChart?.resize());
+  if (view === 'style') requestAnimationFrame(() => state.styleTrendChart?.resize());
+  if (view === 'industry') requestAnimationFrame(() => state.industryTrendChart?.resize());
+  if (view === 'volume') requestAnimationFrame(() => { state.volumeAmountChart?.resize(); state.volumeShareChart?.resize(); });
+  if (view === 'volatility') requestAnimationFrame(() => { state.indexVolatilityChart?.resize(); state.crossVolatilityChart?.resize(); });
+  if (view === 'turnover') requestAnimationFrame(() => state.turnoverChart?.resize());
+  if (view === 'breadth') requestAnimationFrame(() => state.breadthChart?.resize());
 }
 
 function render() {
@@ -292,6 +617,11 @@ $$('.environment-group-control button').forEach((button) => button.addEventListe
   $$('.environment-group-control button').forEach((item) => item.classList.toggle('active', item === button));
   renderEnvironmentTrend();
 }));
+$$('.breadth-group-control button').forEach((button) => button.addEventListener('click', () => {
+  state.breadthGroup = button.dataset.breadthGroup;
+  $$('.breadth-group-control button').forEach((item) => item.classList.toggle('active', item === button));
+  renderBreadth();
+}));
 $$('.range-control button').forEach((button) => button.addEventListener('click', async () => {
   state.range = button.dataset.range;
   $$('.range-control button').forEach((item) => item.classList.toggle('active', item === button));
@@ -299,6 +629,12 @@ $$('.range-control button').forEach((button) => button.addEventListener('click',
 }));
 $('#refreshButton').addEventListener('click', loadDashboard);
 $('#environmentRefresh').addEventListener('click', loadEnvironment);
+$('#styleRefresh').addEventListener('click', loadStyle);
+$('#industryRefresh').addEventListener('click', loadIndustry);
+$('#volumeRefresh').addEventListener('click', loadVolume);
+$('#volatilityRefresh').addEventListener('click', loadVolatility);
+$('#turnoverRefresh').addEventListener('click', loadTurnover);
+$('#breadthRefresh').addEventListener('click', loadBreadth);
 $('#detailBack').addEventListener('click', closeDetail);
 $('#authButton').addEventListener('click', openAuth);
 $('#indicatorsLogin').addEventListener('click', openAuth);
@@ -306,7 +642,7 @@ $('#dialogClose').addEventListener('click', () => $('#authDialog').close());
 $('#userTrigger').addEventListener('click', () => $('#userMenu').classList.toggle('open'));
 $('#logoutButton').addEventListener('click', async () => { await fetch('/api/logout', { method: 'POST' }); state.user = null; $('#userMenu').classList.remove('open'); renderUser(); });
 
-window.addEventListener('resize', () => { state.charts.forEach((chart) => chart.resize()); if (state.environment && !$('#environmentView').classList.contains('hidden')) renderEnvironmentTrend(); state.detailChart?.resize(); });
+window.addEventListener('resize', () => { state.charts.forEach((chart) => chart.resize()); if (state.environment && !$('#environmentView').classList.contains('hidden')) renderEnvironmentTrend(); if (state.style && !$('#styleView').classList.contains('hidden')) renderStyleTrend(); if (state.industry && !$('#industryView').classList.contains('hidden')) renderIndustryTrend([...state.industry.indices].sort((left, right) => Number(right.week) - Number(left.week))); if (state.volume && !$('#volumeView').classList.contains('hidden')) renderVolume(); if (state.volatility && !$('#volatilityView').classList.contains('hidden')) renderVolatility(); if (state.turnover && !$('#turnoverView').classList.contains('hidden')) renderTurnover(); if (state.breadth && !$('#breadthView').classList.contains('hidden')) renderBreadth(); state.detailChart?.resize(); });
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#detailView').classList.contains('hidden')) closeDetail(); });
 
 initIcons();

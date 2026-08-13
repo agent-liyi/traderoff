@@ -9,6 +9,12 @@ const ROOT = fileURLToPath(new URL('.', import.meta.url));
 const STATIC_ROOT = join(ROOT, 'static');
 const DATA_PATH = process.env.FEAR_GREED_DATA || join(ROOT, '..', 'data', 'fear_greed_runtime.json');
 const MARKET_ENVIRONMENT_PATH = process.env.MARKET_ENVIRONMENT_DATA || join(ROOT, '..', 'data', 'market_environment_runtime.json');
+const MARKET_STYLE_PATH = process.env.MARKET_STYLE_DATA || join(ROOT, '..', 'data', 'market_style_runtime.json');
+const INDUSTRY_PRICE_PATH = process.env.INDUSTRY_PRICE_DATA || join(ROOT, '..', 'data', 'industry_price_runtime.json');
+const MARKET_VOLUME_PATH = process.env.MARKET_VOLUME_DATA || join(ROOT, '..', 'data', 'market_volume_runtime.json');
+const MARKET_VOLATILITY_PATH = process.env.MARKET_VOLATILITY_DATA || join(ROOT, '..', 'data', 'market_volatility_runtime.json');
+const MARKET_TURNOVER_PATH = process.env.MARKET_TURNOVER_DATA || join(ROOT, '..', 'data', 'market_turnover_runtime.json');
+const MARKET_BREADTH_PATH = process.env.MARKET_BREADTH_DATA || join(ROOT, '..', 'data', 'market_breadth_runtime.json');
 const DB_PATH = process.env.USERS_DB || join(ROOT, 'data', 'users.sqlite');
 const PORT = Number(process.env.PORT || 8788);
 const WECHAT_AUTH_MODE = process.env.WECHAT_AUTH_MODE || 'development';
@@ -68,6 +74,52 @@ async function loadRows() {
 async function marketEnvironment() {
   const payload = JSON.parse(await readFile(MARKET_ENVIRONMENT_PATH, 'utf8'));
   if (!Array.isArray(payload.indices) || payload.indices.length !== 12) throw new Error('市场环境数据不完整');
+  return payload;
+}
+
+async function marketStyle() {
+  const payload = JSON.parse(await readFile(MARKET_STYLE_PATH, 'utf8'));
+  if (!Array.isArray(payload.indices) || payload.indices.length !== 8) throw new Error('市场风格数据不完整');
+  return payload;
+}
+
+async function industryPrice() {
+  const payload = JSON.parse(await readFile(INDUSTRY_PRICE_PATH, 'utf8'));
+  if (!Array.isArray(payload.indices) || payload.indices.length !== 31) throw new Error('行业价格指数数据不完整');
+  return payload;
+}
+
+async function marketVolume() {
+  const payload = JSON.parse(await readFile(MARKET_VOLUME_PATH, 'utf8'));
+  const expected = [
+    ['沪深300', '000300.SH'], ['中证500', '000905.SH'], ['中证1000', '000852.SH'], ['中证2000', '932000.CSI'], ['3800以外', 'OTHER']
+  ];
+  if (!Array.isArray(payload.buckets) || payload.buckets.length !== expected.length || !Array.isArray(payload.history) || payload.history.length !== 250) throw new Error('市场成交量数据不完整');
+  if (payload.buckets.some((item, index) => item.name !== expected[index][0] || item.code !== expected[index][1])) throw new Error('市场成交量桶定义不正确');
+  return payload;
+}
+
+async function marketVolatility() {
+  const payload = JSON.parse(await readFile(MARKET_VOLATILITY_PATH, 'utf8'));
+  if (!Array.isArray(payload.indexVolatility) || payload.indexVolatility.length !== 5 || !Array.isArray(payload.crossSectionVolatility) || payload.crossSectionVolatility.length !== 4) throw new Error('市场波动率数据不完整');
+  if (payload.indexVolatility.some((item) => item.history?.length !== 250) || payload.crossSectionVolatility.some((item) => item.history?.length !== 250)) throw new Error('市场波动率历史数据不完整');
+  return payload;
+}
+
+async function marketTurnover() {
+  const payload = JSON.parse(await readFile(MARKET_TURNOVER_PATH, 'utf8'));
+  const expected = [['沪深300', '000300.SH'], ['中证500', '000905.SH'], ['中证1000', '000852.SH'], ['中证2000', '932000.CSI'], ['创业板', '399006.SZ'], ['科创50', '000688.SH']];
+  if (!Array.isArray(payload.indices) || payload.indices.length !== expected.length) throw new Error('市场换手率数据不完整');
+  if (payload.indices.some((item, index) => item.name !== expected[index][0] || item.code !== expected[index][1] || item.history?.length !== 250)) throw new Error('市场换手率指数定义不正确');
+  return payload;
+}
+
+async function marketBreadth() {
+  const payload = JSON.parse(await readFile(MARKET_BREADTH_PATH, 'utf8'));
+  const expected = [['全A', 'ALL_A'], ['沪深300', '000300.SH'], ['中证500', '000905.SH'], ['中证1000', '000852.SH'], ['中证2000', '932000.CSI'], ['创业板', '399006.SZ'], ['科创50', '000688.SH']];
+  if (!Array.isArray(payload.groups) || payload.groups.length !== expected.length) throw new Error('成分股涨跌分布数据不完整');
+  if (payload.groups.some((item, index) => item.name !== expected[index][0] || item.code !== expected[index][1] || item.distribution?.length !== 22)) throw new Error('成分股涨跌分布定义不正确');
+  if (payload.groups.some((item) => item.rise + item.flat + item.fall !== item.count || item.distribution.reduce((sum, bin) => sum + Number(bin.count), 0) !== item.count)) throw new Error('成分股涨跌分布统计不完整');
   return payload;
 }
 
@@ -222,6 +274,12 @@ const server = createServer(async (req, res) => {
   try {
     if (req.method === 'GET' && url.pathname === '/api/dashboard') return sendJson(res, 200, await dashboard(url.searchParams.get('range') || '1y', currentUser(req)));
     if (req.method === 'GET' && url.pathname === '/api/market-environment') return sendJson(res, 200, await marketEnvironment());
+    if (req.method === 'GET' && url.pathname === '/api/market-style') return sendJson(res, 200, await marketStyle());
+    if (req.method === 'GET' && url.pathname === '/api/industry-price') return sendJson(res, 200, await industryPrice());
+    if (req.method === 'GET' && url.pathname === '/api/market-volume') return sendJson(res, 200, await marketVolume());
+    if (req.method === 'GET' && url.pathname === '/api/market-volatility') return sendJson(res, 200, await marketVolatility());
+    if (req.method === 'GET' && url.pathname === '/api/market-turnover') return sendJson(res, 200, await marketTurnover());
+    if (req.method === 'GET' && url.pathname === '/api/market-breadth') return sendJson(res, 200, await marketBreadth());
     if (req.method === 'GET' && url.pathname === '/api/me') return sendJson(res, 200, { user: currentUser(req) });
     if (req.method === 'GET' && url.pathname === '/api/auth/wechat') {
       const state = createWechatState();
@@ -253,4 +311,4 @@ const server = createServer(async (req, res) => {
 });
 
 if (process.env.NODE_ENV !== 'test') server.listen(PORT, '0.0.0.0', () => console.log(`A股恐慌贪婪指数: http://localhost:${PORT}`));
-export { dashboard, marketEnvironment, zone, buildWechatAuthorizeUrl, server };
+export { dashboard, marketEnvironment, marketStyle, industryPrice, marketVolume, marketVolatility, marketTurnover, marketBreadth, zone, buildWechatAuthorizeUrl, server };

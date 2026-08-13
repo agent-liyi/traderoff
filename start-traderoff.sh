@@ -5,6 +5,12 @@ refresh() {
   echo "[traderoff] refreshing Tushare data at $(date -Iseconds)"
   python3 /app/notebooks/update_fear_greed_tushare.py
   python3 /app/notebooks/update_market_environment_tushare.py
+  python3 /app/notebooks/update_market_style_tushare.py
+  python3 /app/notebooks/update_industry_price_tushare.py
+  python3 /app/notebooks/update_market_volume_tushare.py
+  python3 /app/notebooks/update_market_volatility_tushare.py
+  python3 /app/notebooks/update_market_turnover_tushare.py
+  python3 /app/notebooks/update_market_breadth_tushare.py
 }
 
 refresh

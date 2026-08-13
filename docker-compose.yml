@@ -14,6 +14,12 @@ services:
       WECHAT_REDIRECT_URI: ${WECHAT_REDIRECT_URI:-https://${TRADEROFF_DOMAIN:-localhost}/api/auth/wechat/callback}
       TUSHARE_TOKEN: ${TUSHARE_TOKEN}
       MARKET_ENVIRONMENT_DATA: /app/data/market_environment_runtime.json
+      MARKET_STYLE_DATA: /app/data/market_style_runtime.json
+      INDUSTRY_PRICE_DATA: /app/data/industry_price_runtime.json
+      MARKET_VOLUME_DATA: /app/data/market_volume_runtime.json
+      MARKET_VOLATILITY_DATA: /app/data/market_volatility_runtime.json
+      MARKET_TURNOVER_DATA: /app/data/market_turnover_runtime.json
+      MARKET_BREADTH_DATA: /app/data/market_breadth_runtime.json
     restart: unless-stopped
 
   caddy:

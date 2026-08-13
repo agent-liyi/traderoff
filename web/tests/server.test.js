@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.NODE_ENV = 'test';
-const { zone, buildWechatAuthorizeUrl, dashboard, marketEnvironment } = await import('../server.js');
+const { zone, buildWechatAuthorizeUrl, dashboard, marketEnvironment, marketStyle, industryPrice, marketVolume, marketVolatility, marketTurnover, marketBreadth } = await import('../server.js');
 
 test('zone boundaries follow notebook definitions', () => {
   assert.equal(zone(24.9), '极度恐惧');
@@ -27,6 +27,69 @@ test('market environment returns 12 complete Tushare indices', async () => {
   assert.ok(result.indices.every((item) => ['week', 'month', 'ytd', 'year', 'close'].every((key) => Number.isFinite(item[key]))));
   assert.ok(result.indices.every((item) => item.sparkline.length === 5 && item.sparkline.every((point) => Number.isFinite(point.close))));
   assert.ok(result.indices.every((item) => item.history.length === 250 && item.history.every((point) => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && Number.isFinite(point.close))));
+});
+
+test('market style returns eight complete Tushare style indices', async () => {
+  const result = await marketStyle();
+  const expectedCodes = ['399370.SZ', '399371.SZ', '399372.SZ', '399373.SZ', '399374.SZ', '399375.SZ', '399376.SZ', '399377.SZ'];
+  assert.equal(result.indices.length, 8);
+  assert.deepEqual(result.indices.map((item) => item.code), expectedCodes);
+  assert.ok(result.indices.every((item) => ['全市场', '大盘', '中盘', '小盘'].includes(item.group)));
+  assert.ok(result.indices.every((item) => ['week', 'month', 'ytd', 'year', 'close'].every((key) => Number.isFinite(item[key]))));
+  assert.ok(result.indices.every((item) => item.sparkline.length === 5 && item.sparkline.every((point) => Number.isFinite(point.close))));
+  assert.ok(result.indices.every((item) => item.history.length === 250 && item.history.every((point) => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && Number.isFinite(point.close))));
+});
+
+test('industry price returns 31 complete Shenwan Level 1 indices', async () => {
+  const result = await industryPrice();
+  assert.equal(result.indices.length, 31);
+  assert.ok(result.indices.every((item) => /^801\d{3}\.SI$/.test(item.code)));
+  assert.ok(result.indices.every((item) => ['week', 'month', 'ytd', 'year', 'close', 'amount'].every((key) => Number.isFinite(item[key]))));
+  assert.ok(result.indices.every((item) => item.sparkline.length === 5 && item.sparkline.every((point) => Number.isFinite(point.close))));
+  assert.ok(result.indices.every((item) => item.history.length === 250 && item.history.every((point) => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && Number.isFinite(point.close))));
+});
+
+test('market volume returns five reconciled size buckets and 250 complete days', async () => {
+  const result = await marketVolume();
+  const expected = [['沪深300', '000300.SH'], ['中证500', '000905.SH'], ['中证1000', '000852.SH'], ['中证2000', '932000.CSI'], ['3800以外', 'OTHER']];
+  assert.deepEqual(result.buckets.map((item) => [item.name, item.code]), expected);
+  assert.equal(result.history.length, 250);
+  assert.ok(result.buckets.every((item) => ['amount', 'amountPercentile', 'share', 'sharePercentile'].every((key) => Number.isFinite(item[key]))));
+  assert.ok(result.buckets.every((item) => item.share >= 0 && item.share <= 100 && item.amountPercentile > 0 && item.amountPercentile <= 100 && item.sharePercentile > 0 && item.sharePercentile <= 100));
+  assert.ok(result.history.every((row) => {
+    const amounts = Object.values(row.amounts);
+    const shares = Object.values(row.shares);
+    return /^\d{4}-\d{2}-\d{2}$/.test(row.date) && Number.isFinite(row.total) && amounts.length === 5 && shares.length === 5 && amounts.every(Number.isFinite) && shares.every((value) => Number.isFinite(value) && value >= 0 && value <= 100) && Math.abs(amounts.reduce((sum, value) => sum + value, 0) - row.total) < 0.02 && Math.abs(shares.reduce((sum, value) => sum + value, 0) - 100) < 0.02;
+  }));
+});
+
+test('market volatility returns complete Tushare index and cross-sectional histories', async () => {
+  const result = await marketVolatility();
+  assert.deepEqual(result.indexVolatility.map((item) => [item.name, item.code]), [['沪深300', '000300.SH'], ['中证500', '000905.SH'], ['中证1000', '000852.SH'], ['中证2000', '932000.CSI'], ['中证全指', '000985.CSI']]);
+  assert.deepEqual(result.crossSectionVolatility.map((item) => [item.name, item.code]), [['沪深300', '000300.SH'], ['中证500', '000905.SH'], ['中证1000', '000852.SH'], ['中证1800', 'CSI1800']]);
+  for (const group of [result.indexVolatility, result.crossSectionVolatility]) {
+    assert.ok(group.every((item) => item.history.length === 250));
+    assert.ok(group.every((item) => item.history.every((point) => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && Number.isFinite(point.value) && point.value >= 0)));
+  }
+});
+
+test('market turnover returns six complete free-float turnover histories', async () => {
+  const result = await marketTurnover();
+  const expected = [['沪深300', '000300.SH'], ['中证500', '000905.SH'], ['中证1000', '000852.SH'], ['中证2000', '932000.CSI'], ['创业板', '399006.SZ'], ['科创50', '000688.SH']];
+  assert.deepEqual(result.indices.map((item) => [item.name, item.code]), expected);
+  assert.ok(result.indices.every((item) => ['current', 'weekAverage', 'monthAverage', 'percentile'].every((key) => Number.isFinite(item[key]))));
+  assert.ok(result.indices.every((item) => item.current >= 0 && item.percentile > 0 && item.percentile <= 100));
+  assert.ok(result.indices.every((item) => item.sparkline.length === 5 && item.history.length === 250));
+  assert.ok(result.indices.every((item) => item.history.every((point) => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && Number.isFinite(point.value) && point.value >= 0)));
+});
+
+test('market breadth returns seven reconciled advance-decline distributions', async () => {
+  const result = await marketBreadth();
+  const expected = [['全A', 'ALL_A'], ['沪深300', '000300.SH'], ['中证500', '000905.SH'], ['中证1000', '000852.SH'], ['中证2000', '932000.CSI'], ['创业板', '399006.SZ'], ['科创50', '000688.SH']];
+  assert.deepEqual(result.groups.map((item) => [item.name, item.code]), expected);
+  assert.ok(result.groups.every((item) => Number.isInteger(item.count) && item.count > 0 && item.rise + item.flat + item.fall === item.count));
+  assert.ok(result.groups.every((item) => item.distribution.length === 22 && item.distribution.every((bin) => typeof bin.label === 'string' && Number.isInteger(bin.count) && bin.count >= 0)));
+  assert.ok(result.groups.every((item) => item.distribution.reduce((sum, bin) => sum + bin.count, 0) === item.count));
 });
 
 test('dashboard hides raw indicator values for anonymous visitors', async () => {
