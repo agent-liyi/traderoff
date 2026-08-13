@@ -1,4 +1,4 @@
-const state = { range: '1y', data: null, environment: null, style: null, industry: null, volume: null, volatility: null, turnover: null, breadth: null, environmentGroup: 'A股', breadthGroup: 'ALL_A', charts: [], environmentTrendChart: null, styleTrendChart: null, industryTrendChart: null, volumeAmountChart: null, volumeShareChart: null, indexVolatilityChart: null, crossVolatilityChart: null, turnoverChart: null, breadthChart: null, user: null };
+const state = { range: '1y', data: null, environment: null, style: null, industry: null, volume: null, volatility: null, turnover: null, breadth: null, factors: null, environmentGroup: 'A股', breadthGroup: 'ALL_A', charts: [], environmentTrendChart: null, styleTrendChart: null, industryTrendChart: null, volumeAmountChart: null, volumeShareChart: null, indexVolatilityChart: null, crossVolatilityChart: null, turnoverChart: null, breadthChart: null, factorIndexChart: null, factorDistributionChart: null, factorIndustryChart: null, user: null };
 const $ = (selector) => document.querySelector(selector);
 const $$ = (selector) => [...document.querySelectorAll(selector)];
 const palette = { qvix: '#5AAEF3', strength: '#333333', futures: '#E65A56', volume: '#6D61E4', safety: '#30CB13' };
@@ -78,6 +78,13 @@ async function loadBreadth() {
   if (!response.ok) throw new Error('成分股涨跌分布数据加载失败');
   state.breadth = await response.json();
   renderBreadth();
+}
+
+async function loadFactors() {
+  const response = await fetch('/api/factor-exposure');
+  if (!response.ok) throw new Error('多因子画像数据加载失败');
+  state.factors = await response.json();
+  renderFactors();
 }
 
 function percent(value) {
@@ -412,6 +419,91 @@ function renderEnvironmentTrend() {
   });
 }
 
+function renderFactors() {
+  const data = state.factors;
+  $('#factorDate').textContent = data.asOf;
+  $('#factorDisclaimer').textContent = data.model.disclaimer;
+  $('#factorQualityStats').innerHTML = [
+    ['股票池', `${data.quality.universeCount}只`], ['价格历史', `${data.quality.priceHistoryDays}日`],
+    ['财务记录', `${data.quality.financialReportRows}条`], ['申万行业覆盖', `${data.quality.swIndustryCovered}只`]
+  ].map(([label, value]) => `<div><span>${label}</span><strong>${value}</strong></div>`).join('');
+  $('#factorWarnings').innerHTML = data.quality.warnings.map((warning) => `<li>${warning}</li>`).join('');
+  $('#factorOverview').innerHTML = data.factors.map((factor) => `<article class="factor-item">
+    <div><strong>${factor.name}</strong><span class="factor-quality-${factor.quality}">${factor.quality.toUpperCase()}</span></div>
+    <p>${factor.proxy}</p><small>${factor.source}</small>
+    <footer><span>覆盖 ${factor.count}/${data.quality.universeCount}</span><b>${(factor.coverage * 100).toFixed(1)}%</b></footer>
+  </article>`).join('');
+  const select = $('#factorDistributionSelect');
+  select.innerHTML = data.factors.map((factor) => `<option value="${factor.key}">${factor.name}</option>`).join('');
+  renderFactorIndexChart();
+  renderFactorDistributionChart(select.value || data.factors[0].key);
+  renderFactorIndustryChart();
+  renderFactorStockTable();
+}
+
+function factorChartBase() {
+  return { backgroundColor: '#fff', tooltip: { backgroundColor: '#fff', borderColor: '#ccc', textStyle: { color: '#222', fontSize: 11 } } };
+}
+
+function renderFactorIndexChart() {
+  state.factorIndexChart?.dispose();
+  const chart = echarts.init($('#factorIndexChart'), null, { renderer: 'canvas' });
+  state.factorIndexChart = chart;
+  const data = state.factors;
+  const compact = window.innerWidth <= 760;
+  const axisValues = data.indices.flatMap((index) => data.factors.map((factor) => index.exposures[factor.key])).filter(Number.isFinite);
+  const axisLimit = Math.max(1.5, Math.min(3, Math.ceil(Math.max(...axisValues.map(Math.abs), 1.5) * 10) / 10));
+  chart.setOption({
+    ...factorChartBase(), color: ['#1F77B4', '#E15759', '#2C8C6B', '#F28E2B'],
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: '#fff', borderColor: '#ccc', textStyle: { color: '#222', fontSize: 11 }, valueFormatter: (value) => value == null ? '无数据' : Number(value).toFixed(2) },
+    legend: { top: 8, type: 'scroll', textStyle: { fontSize: 10 } },
+    grid: { left: compact ? 88 : 105, right: 20, top: 48, bottom: 38 },
+    xAxis: { type: 'value', min: -axisLimit, max: axisLimit, ...axisStyle() },
+    yAxis: { type: 'category', data: data.factors.map((item) => item.name), axisLabel: { color: '#555', fontSize: 10 }, axisTick: { show: false }, axisLine: { lineStyle: { color: '#999' } } },
+    dataZoom: compact ? [{ type: 'inside', yAxisIndex: 0 }] : [],
+    series: data.indices.map((index) => ({ name: index.name, type: 'bar', data: data.factors.map((factor) => index.exposures[factor.key]), barMaxWidth: 11 }))
+  });
+}
+
+function renderFactorDistributionChart(key) {
+  state.factorDistributionChart?.dispose();
+  const chart = echarts.init($('#factorDistributionChart'), null, { renderer: 'canvas' });
+  state.factorDistributionChart = chart;
+  const distribution = state.factors.distributions.find((item) => item.key === key);
+  chart.setOption({
+    ...factorChartBase(), tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: '#fff', borderColor: '#ccc', textStyle: { color: '#222', fontSize: 11 } },
+    grid: { left: 58, right: 24, top: 28, bottom: 48 }, xAxis: { type: 'category', data: distribution.bins.map((bin) => bin.label), ...axisStyle(), name: '标准化暴露' },
+    yAxis: { type: 'value', minInterval: 1, ...axisStyle(), name: '股票数' }, series: [{ type: 'bar', data: distribution.bins.map((bin) => bin.count), itemStyle: { color: '#2D75B6' }, barMaxWidth: 72 }]
+  });
+}
+
+function renderFactorIndustryChart() {
+  state.factorIndustryChart?.dispose();
+  const element = $('#factorIndustryChart');
+  element.style.width = `${Math.max(960, state.factors.factors.length * 70)}px`;
+  element.style.height = `${Math.max(420, state.factors.industries.length * 27 + 100)}px`;
+  const chart = echarts.init(element, null, { renderer: 'canvas' });
+  state.factorIndustryChart = chart;
+  const valueMap = new Map(state.factors.heatmap.map((item) => [`${item.factor}|${item.industry}`, item.value]));
+  chart.setOption({
+    ...factorChartBase(), tooltip: { position: 'top', backgroundColor: '#fff', borderColor: '#ccc', textStyle: { color: '#222', fontSize: 11 }, formatter: ({ value }) => `${state.factors.factors[value[0]].name} · ${state.factors.industries[value[1]]}<br><b>${value[2] == null ? '无数据' : Number(value[2]).toFixed(2)}</b>` },
+    grid: { left: 92, right: 28, top: 58, bottom: 30 },
+    xAxis: { type: 'category', data: state.factors.factors.map((item) => item.name), axisLabel: { rotate: 45, fontSize: 9, color: '#555' }, splitArea: { show: true } },
+    yAxis: { type: 'category', data: state.factors.industries, axisLabel: { fontSize: 9, color: '#555' }, splitArea: { show: true } },
+    visualMap: { min: -1, max: 1, calculable: true, orient: 'horizontal', left: 'center', top: 4, itemWidth: 12, itemHeight: 120, inRange: { color: ['#2878B5', '#F2F2F2', '#D94F4B'] }, textStyle: { fontSize: 9 } },
+    series: [{ type: 'heatmap', data: state.factors.factors.flatMap((factor, x) => state.factors.industries.map((industry, y) => [x, y, valueMap.get(`${factor.key}|${industry}`) ?? null])), emphasis: { itemStyle: { borderColor: '#222', borderWidth: 1 } } }]
+  });
+}
+
+function renderFactorStockTable() {
+  const data = state.factors;
+  const names = new Map(data.factors.map((item) => [item.key, item.name]));
+  $('#factorStockHead').innerHTML = `<tr><th>证券</th><th>行业</th><th>总市值(亿元)</th>${data.stockTableFactors.map((key) => `<th>${names.get(key)}</th>`).join('')}</tr>`;
+  const query = $('#factorStockSearch').value.trim().toLowerCase();
+  const rows = data.stocks.filter((item) => !query || item.code.toLowerCase().includes(query) || item.name.toLowerCase().includes(query)).slice(0, 100);
+  $('#factorStockRows').innerHTML = rows.map((item) => `<tr><th><strong>${item.name}</strong><small>${item.code}</small></th><td>${item.industry}</td><td>${item.marketCap?.toLocaleString('zh-CN') ?? '--'}</td>${data.stockTableFactors.map((key) => `<td class="factor-value">${item.exposures[key] == null ? '--' : Number(item.exposures[key]).toFixed(2)}</td>`).join('')}</tr>`).join('');
+}
+
 async function switchView(view) {
   $$('.view-tabs button').forEach((button) => button.classList.toggle('active', button.dataset.view === view));
   $('#sentimentView').classList.toggle('hidden', view !== 'sentiment');
@@ -422,6 +514,7 @@ async function switchView(view) {
   $('#volatilityView').classList.toggle('hidden', view !== 'volatility');
   $('#turnoverView').classList.toggle('hidden', view !== 'turnover');
   $('#breadthView').classList.toggle('hidden', view !== 'breadth');
+  $('#factorView').classList.toggle('hidden', view !== 'factors');
   if (view === 'environment' && !state.environment) await loadEnvironment();
   if (view === 'style' && !state.style) await loadStyle();
   if (view === 'industry' && !state.industry) await loadIndustry();
@@ -429,6 +522,7 @@ async function switchView(view) {
   if (view === 'volatility' && !state.volatility) await loadVolatility();
   if (view === 'turnover' && !state.turnover) await loadTurnover();
   if (view === 'breadth' && !state.breadth) await loadBreadth();
+  if (view === 'factors' && !state.factors) await loadFactors();
   if (view === 'environment') requestAnimationFrame(() => state.environmentTrendChart?.resize());
   if (view === 'style') requestAnimationFrame(() => state.styleTrendChart?.resize());
   if (view === 'industry') requestAnimationFrame(() => state.industryTrendChart?.resize());
@@ -436,6 +530,7 @@ async function switchView(view) {
   if (view === 'volatility') requestAnimationFrame(() => { state.indexVolatilityChart?.resize(); state.crossVolatilityChart?.resize(); });
   if (view === 'turnover') requestAnimationFrame(() => state.turnoverChart?.resize());
   if (view === 'breadth') requestAnimationFrame(() => state.breadthChart?.resize());
+  if (view === 'factors') requestAnimationFrame(() => { state.factorIndexChart?.resize(); state.factorDistributionChart?.resize(); state.factorIndustryChart?.resize(); });
 }
 
 function render() {
@@ -636,6 +731,9 @@ $('#volumeRefresh').addEventListener('click', loadVolume);
 $('#volatilityRefresh').addEventListener('click', loadVolatility);
 $('#turnoverRefresh').addEventListener('click', loadTurnover);
 $('#breadthRefresh').addEventListener('click', loadBreadth);
+$('#factorRefresh').addEventListener('click', loadFactors);
+$('#factorDistributionSelect').addEventListener('change', (event) => renderFactorDistributionChart(event.target.value));
+$('#factorStockSearch').addEventListener('input', renderFactorStockTable);
 $('#detailBack').addEventListener('click', closeDetail);
 $('#authButton').addEventListener('click', openAuth);
 $('#indicatorsLogin').addEventListener('click', openAuth);
@@ -643,7 +741,7 @@ $('#dialogClose').addEventListener('click', () => $('#authDialog').close());
 $('#userTrigger').addEventListener('click', () => $('#userMenu').classList.toggle('open'));
 $('#logoutButton').addEventListener('click', async () => { await fetch('/api/logout', { method: 'POST' }); state.user = null; $('#userMenu').classList.remove('open'); renderUser(); });
 
-window.addEventListener('resize', () => { state.charts.forEach((chart) => chart.resize()); if (state.environment && !$('#environmentView').classList.contains('hidden')) renderEnvironmentTrend(); if (state.style && !$('#styleView').classList.contains('hidden')) renderStyleTrend(); if (state.industry && !$('#industryView').classList.contains('hidden')) renderIndustryTrend([...state.industry.indices].sort((left, right) => Number(right.week) - Number(left.week))); if (state.volume && !$('#volumeView').classList.contains('hidden')) renderVolume(); if (state.volatility && !$('#volatilityView').classList.contains('hidden')) renderVolatility(); if (state.turnover && !$('#turnoverView').classList.contains('hidden')) renderTurnover(); if (state.breadth && !$('#breadthView').classList.contains('hidden')) renderBreadth(); state.detailChart?.resize(); });
+window.addEventListener('resize', () => { state.charts.forEach((chart) => chart.resize()); if (state.environment && !$('#environmentView').classList.contains('hidden')) renderEnvironmentTrend(); if (state.style && !$('#styleView').classList.contains('hidden')) renderStyleTrend(); if (state.industry && !$('#industryView').classList.contains('hidden')) renderIndustryTrend([...state.industry.indices].sort((left, right) => Number(right.week) - Number(left.week))); if (state.volume && !$('#volumeView').classList.contains('hidden')) renderVolume(); if (state.volatility && !$('#volatilityView').classList.contains('hidden')) renderVolatility(); if (state.turnover && !$('#turnoverView').classList.contains('hidden')) renderTurnover(); if (state.breadth && !$('#breadthView').classList.contains('hidden')) renderBreadth(); if (state.factors && !$('#factorView').classList.contains('hidden')) { renderFactorIndexChart(); renderFactorDistributionChart($('#factorDistributionSelect').value); } state.detailChart?.resize(); });
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#detailView').classList.contains('hidden')) closeDetail(); });
 
 initIcons();

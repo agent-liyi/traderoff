@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.NODE_ENV = 'test';
-const { zone, buildWechatAuthorizeUrl, dashboard, marketEnvironment, marketStyle, industryPrice, marketVolume, marketVolatility, marketTurnover, marketBreadth } = await import('../server.js');
+const { zone, buildWechatAuthorizeUrl, dashboard, marketEnvironment, marketStyle, industryPrice, marketVolume, marketVolatility, marketTurnover, marketBreadth, factorExposure } = await import('../server.js');
 
 test('zone boundaries follow notebook definitions', () => {
   assert.equal(zone(24.9), '极度恐惧');
@@ -90,6 +90,22 @@ test('market breadth returns seven reconciled advance-decline distributions', as
   assert.ok(result.groups.every((item) => Number.isInteger(item.count) && item.count > 0 && item.rise + item.flat + item.fall === item.count));
   assert.ok(result.groups.every((item) => item.distribution.length === 22 && item.distribution.every((bin) => typeof bin.label === 'string' && Number.isInteger(bin.count) && bin.count >= 0)));
   assert.ok(result.groups.every((item) => item.distribution.reduce((sum, bin) => sum + bin.count, 0) === item.count));
+});
+
+test('factor exposure returns the exact CNLT reference factor set and transparent quality metadata', async () => {
+  const result = await factorExposure();
+  const expected = ['size', 'nonlinearSize', 'beta', 'momentum', 'residualVolatility', 'liquidity', 'bookToPrice', 'earningsYield', 'growth', 'dividendYield', 'leverage', 'earningsVariability', 'earningsQuality', 'profitability', 'investmentQuality', 'longTermReversal'];
+  assert.deepEqual(result.factors.map((item) => item.key), expected);
+  assert.equal(result.indices.length, 4);
+  assert.equal(result.distributions.length, 16);
+  assert.ok(result.model.disclaimer.includes('非 MSCI Barra 官方模型'));
+  assert.ok(result.quality.universeCount >= 1500 && result.quality.universeCount <= 1900);
+  assert.ok(result.indices.slice(0, 3).every((item) => item.count >= 250));
+  assert.equal(result.indices.at(-1).count, result.quality.universeCount);
+  assert.ok(result.quality.priceHistoryDays >= 1250);
+  assert.ok(result.factors.every((item) => Number.isFinite(item.coverage) && item.coverage >= 0 && item.coverage <= 1));
+  assert.ok(result.factors.filter((item) => item.coverage === 0).every((item) => result.indices.every((index) => index.exposures[item.key] === null)));
+  assert.ok(result.stocks.length <= 500);
 });
 
 test('dashboard hides raw indicator values for anonymous visitors', async () => {

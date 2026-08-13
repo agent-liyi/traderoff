@@ -20,6 +20,7 @@ services:
       MARKET_VOLATILITY_DATA: /app/data/market_volatility_runtime.json
       MARKET_TURNOVER_DATA: /app/data/market_turnover_runtime.json
       MARKET_BREADTH_DATA: /app/data/market_breadth_runtime.json
+      FACTOR_EXPOSURE_DATA: /app/data/factor_exposure_runtime.json
     restart: unless-stopped
 
   caddy:

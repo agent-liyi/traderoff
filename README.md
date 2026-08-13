@@ -10,7 +10,9 @@ For production HTTPS deployment, low-memory server recovery, and verification co
 
 - Five-factor A-share sentiment index: QVIX, price strength, IF futures basis, volume deviation, and stock-bond safety demand.
 - Market environment table and normalized 250-trading-day relative-performance charts for A shares, Hong Kong, and US markets.
-- Tushare refresh worker runs at startup and checks for updates every five minutes.
+- A 16-factor CNLT-style reference profile for the CSI 1800 reference universe, including coverage, index comparison, cross-sectional distributions, an SW2021 industry heatmap, and representative stocks.
+- The factor module uses independently designed transparent proxies and is not an MSCI Barra official model. Missing financial data remains null and is disclosed through warnings.
+- Tushare refresh worker runs at startup and checks for updates every five minutes. The higher-cost factor generator is opt-in and is not part of startup refresh.
 - China market close gate: before 21:00 Asia/Shanghai time, the refresh uses the prior open trading day.
 - Optional WeChat OAuth login controls access to raw sentiment factor values.
 
@@ -68,7 +70,16 @@ npm ci
 npm test
 ```
 
-The Docker image includes Python, NumPy, Pandas, SciPy, and Tushare for the scheduled refresh tasks. After `docker compose up -d --build` has produced the runtime data, run the server tests inside the container with:
+The Docker image includes Python, NumPy, Pandas, SciPy, and Tushare for the scheduled refresh tasks. Generate the opt-in factor snapshot from the repository root with:
+
+```sh
+set -a; . ./.env; set +a
+FEAR_GREED_DATA_DIR="$PWD/data" python3 notebooks/update_factor_exposure_tushare.py
+```
+
+The generator reuses `data/tushare_raw/equity_daily`. If financial API access is unavailable, it still writes a valid snapshot with null financial exposures and explicit `quality.warnings`; `start-traderoff.sh` does not invoke it.
+
+After `docker compose up -d --build` has produced the runtime data, run the server tests inside the container with:
 
 ```sh
 docker compose exec traderoff sh -lc 'cd /app/web && npm test'

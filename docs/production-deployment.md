@@ -21,6 +21,7 @@ Traderoff container :8788
 - Caddy 对外发布 `80`、`443` 和 UDP `443`，自动申请、保存并续期 TLS 证书。
 - Traderoff 仅在 Docker 网络中暴露 `8788`，不直接发布到主机端口。
 - `./data` 挂载到容器 `/app/data`，存放运行时 JSON、Tushare 缓存和用户数据库。
+- 多因子快照 `factor_exposure_runtime.json` 由显式命令生成，不在默认启动刷新链中；生成失败不会阻塞 Node 服务。
 
 ## 前置条件
 
@@ -153,6 +154,7 @@ curl -I http://traderoff.example.com/
 curl -fsS https://traderoff.example.com/ -o /dev/null
 curl -fsS 'https://traderoff.example.com/api/dashboard?range=1y' -o /tmp/dashboard.json
 curl -fsS https://traderoff.example.com/api/market-environment -o /tmp/market-environment.json
+curl -fsS https://traderoff.example.com/api/factor-exposure -o /tmp/factor-exposure.json
 ```
 
 HTTP 响应应为 `308 Permanent Redirect`，并包含：
@@ -167,11 +169,14 @@ Location: https://traderoff.example.com/
 node - <<'NODE'
 const dashboard = require('/tmp/dashboard.json');
 const market = require('/tmp/market-environment.json');
+const factors = require('/tmp/factor-exposure.json');
 if (!dashboard.asOf || !Number.isFinite(dashboard.index?.score)) throw new Error('dashboard index is invalid');
 if (dashboard.series?.length !== 250) throw new Error('expected 250 dashboard rows for range=1y');
 if (dashboard.indicators?.length !== 5) throw new Error('expected five indicators');
 if (!market.asOf || market.indices?.length !== 12) throw new Error('expected twelve market indices');
 if (market.indices.some((item) => item.history?.length !== 250)) throw new Error('expected 250 history rows for each index');
+if (factors.factors?.length !== 16 || factors.quality?.universeCount < 1500 || factors.quality?.universeCount > 1900) throw new Error('expected sixteen factors and a valid CSI 1800 reference universe');
+if (!factors.model?.disclaimer?.includes('非 MSCI Barra 官方模型')) throw new Error('expected model disclaimer');
 console.log('deployment verification passed');
 NODE
 ```

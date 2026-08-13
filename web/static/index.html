@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="A股 · 市场情绪温度计与五项市场情绪指标看板">
   <title>A股 · 市场情绪温度计</title>
-  <link rel="stylesheet" href="/styles.css?v=16">
+  <link rel="stylesheet" href="/styles.css?v=17">
 </head>
 <body>
   <header class="topbar">
@@ -34,6 +34,7 @@
       <button data-view="volatility">波动率</button>
       <button data-view="turnover">换手率</button>
       <button data-view="breadth">涨跌分布</button>
+      <button data-view="factors">多因子画像</button>
     </nav>
 
     <div id="sentimentView">
@@ -260,6 +261,37 @@
         </div>
       </section>
     </section>
+    <section class="factor-view hidden" id="factorView">
+      <header class="environment-head">
+        <div><h1>多因子画像</h1><p class="intro">中证1800参考股票池的16项长期因子代理 · 数据截至 <b id="factorDate">--</b></p></div>
+        <button class="icon-button" id="factorRefresh" title="刷新数据" aria-label="刷新多因子画像数据"><i data-lucide="refresh-cw"></i></button>
+      </header>
+      <section class="factor-quality" aria-labelledby="factorQualityTitle">
+        <div><p class="eyebrow">DATA QUALITY</p><h2 id="factorQualityTitle">数据质量与模型声明</h2><p id="factorDisclaimer">--</p></div>
+        <div class="factor-quality-stats" id="factorQualityStats"></div>
+        <ul id="factorWarnings"></ul>
+      </section>
+      <section class="factor-section" aria-labelledby="factorOverviewTitle">
+        <div class="environment-trend-head"><div><p class="eyebrow">16 FACTORS</p><h2 id="factorOverviewTitle">因子概览</h2><p>覆盖率、质量等级与透明代理口径。</p></div></div>
+        <div class="factor-overview-grid" id="factorOverview"></div>
+      </section>
+      <section class="factor-section" aria-labelledby="factorIndexTitle">
+        <div class="environment-trend-head"><div><p class="eyebrow">INDEX EXPOSURE</p><h2 id="factorIndexTitle">主要指数暴露比较</h2><p>按总市值加权；空值代表原始数据覆盖不足。</p></div></div>
+        <div class="factor-chart-wrap"><div id="factorIndexChart" class="factor-index-chart"></div></div>
+      </section>
+      <section class="factor-section" aria-labelledby="factorDistributionTitle">
+        <div class="environment-trend-head"><div><p class="eyebrow">CROSS SECTION</p><h2 id="factorDistributionTitle">因子截面分布</h2></div><select id="factorDistributionSelect" class="factor-select" aria-label="选择截面分布因子"></select></div>
+        <div class="factor-chart-wrap"><div id="factorDistributionChart" class="factor-distribution-chart"></div></div>
+      </section>
+      <section class="factor-section" aria-labelledby="factorIndustryTitle">
+        <div class="environment-trend-head"><div><p class="eyebrow">SW2021 INDUSTRIES</p><h2 id="factorIndustryTitle">行业因子热力图</h2><p>申万2021一级行业当前成员的等权平均暴露。</p></div></div>
+        <div class="factor-chart-wrap factor-heatmap-scroll"><div id="factorIndustryChart" class="factor-industry-chart"></div></div>
+      </section>
+      <section class="factor-section" aria-labelledby="factorStocksTitle">
+        <div class="environment-trend-head"><div><p class="eyebrow">STOCK EXPOSURE</p><h2 id="factorStocksTitle">代表个股暴露</h2><p>按总市值保留前300只，控制运行时数据体积。</p></div><input id="factorStockSearch" class="factor-search" type="search" placeholder="搜索代码或名称" aria-label="搜索个股"></div>
+        <div class="environment-table-wrap factor-table-wrap"><table class="environment-table factor-table"><thead id="factorStockHead"></thead><tbody id="factorStockRows"></tbody></table></div>
+      </section>
+    </section>
   </main>
 
   <section class="detail-view hidden" id="detailView" aria-live="polite">
@@ -294,6 +326,6 @@
 
   <script src="/vendor/echarts.min.js"></script>
   <script src="/vendor/lucide.min.js"></script>
-  <script type="module" src="/app.js?v=22"></script>
+  <script type="module" src="/app.js?v=23"></script>
 </body>
 </html>

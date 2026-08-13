@@ -23,6 +23,7 @@ COPY notebooks/update_market_volume_tushare.py /app/notebooks/update_market_volu
 COPY notebooks/update_market_volatility_tushare.py /app/notebooks/update_market_volatility_tushare.py
 COPY notebooks/update_market_turnover_tushare.py /app/notebooks/update_market_turnover_tushare.py
 COPY notebooks/update_market_breadth_tushare.py /app/notebooks/update_market_breadth_tushare.py
+COPY notebooks/update_factor_exposure_tushare.py /app/notebooks/update_factor_exposure_tushare.py
 COPY start-traderoff.sh /app/start-traderoff.sh
 RUN chmod +x /app/start-traderoff.sh && mkdir -p /app/data /app/web/data /app/data/tushare_raw
 
@@ -38,6 +39,7 @@ ENV MARKET_VOLUME_DATA=/app/data/market_volume_runtime.json
 ENV MARKET_VOLATILITY_DATA=/app/data/market_volatility_runtime.json
 ENV MARKET_TURNOVER_DATA=/app/data/market_turnover_runtime.json
 ENV MARKET_BREADTH_DATA=/app/data/market_breadth_runtime.json
+ENV FACTOR_EXPOSURE_DATA=/app/data/factor_exposure_runtime.json
 ENV USERS_DB=/app/web/data/users.sqlite
 
 EXPOSE 8788
