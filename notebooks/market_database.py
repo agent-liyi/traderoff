@@ -107,23 +107,24 @@ def upsert_fear_greed_rows(connection, rows: list[dict[str, Any]], refresh_id: u
             row["避险需求"], row["our_index"], row["our_zone"], row["shanghai_index"], row["raw_qvix"],
             row["raw_strength"], row["raw_futures"], row["raw_volume"], row["raw_safety"], refresh_id,
         ))
-    connection.executemany(
-        """
-        INSERT INTO market_fear_greed_daily (
-          trade_date, score_qvix, score_strength, score_futures, score_volume, score_safety, our_index, our_zone,
-          shanghai_index, raw_qvix, raw_strength, raw_futures, raw_volume, raw_safety, refresh_id
-        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (trade_date) DO UPDATE SET
-          score_qvix = EXCLUDED.score_qvix, score_strength = EXCLUDED.score_strength,
-          score_futures = EXCLUDED.score_futures, score_volume = EXCLUDED.score_volume,
-          score_safety = EXCLUDED.score_safety, our_index = EXCLUDED.our_index, our_zone = EXCLUDED.our_zone,
-          shanghai_index = EXCLUDED.shanghai_index, raw_qvix = EXCLUDED.raw_qvix,
-          raw_strength = EXCLUDED.raw_strength, raw_futures = EXCLUDED.raw_futures,
-          raw_volume = EXCLUDED.raw_volume, raw_safety = EXCLUDED.raw_safety,
-          refresh_id = EXCLUDED.refresh_id, updated_at = now()
-        """,
-        records,
-    )
+    with connection.cursor() as cursor:
+        cursor.executemany(
+            """
+            INSERT INTO market_fear_greed_daily (
+              trade_date, score_qvix, score_strength, score_futures, score_volume, score_safety, our_index, our_zone,
+              shanghai_index, raw_qvix, raw_strength, raw_futures, raw_volume, raw_safety, refresh_id
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            ON CONFLICT (trade_date) DO UPDATE SET
+              score_qvix = EXCLUDED.score_qvix, score_strength = EXCLUDED.score_strength,
+              score_futures = EXCLUDED.score_futures, score_volume = EXCLUDED.score_volume,
+              score_safety = EXCLUDED.score_safety, our_index = EXCLUDED.our_index, our_zone = EXCLUDED.our_zone,
+              shanghai_index = EXCLUDED.shanghai_index, raw_qvix = EXCLUDED.raw_qvix,
+              raw_strength = EXCLUDED.raw_strength, raw_futures = EXCLUDED.raw_futures,
+              raw_volume = EXCLUDED.raw_volume, raw_safety = EXCLUDED.raw_safety,
+              refresh_id = EXCLUDED.refresh_id, updated_at = now()
+            """,
+            records,
+        )
 
 
 def raw_source(path: Path, raw_dir: Path) -> tuple[str, date | None]:
