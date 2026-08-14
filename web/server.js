@@ -3,6 +3,7 @@ import { readFile, stat, mkdir } from 'node:fs/promises';
 import { extname, join, normalize } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
+import pg from 'pg';
 import { createHash, randomBytes } from 'node:crypto';
 
 const ROOT = fileURLToPath(new URL('.', import.meta.url));
@@ -23,6 +24,11 @@ const WECHAT_APP_ID = process.env.WECHAT_APP_ID || '';
 const WECHAT_APP_SECRET = process.env.WECHAT_APP_SECRET || '';
 const WECHAT_REDIRECT_URI = process.env.WECHAT_REDIRECT_URI || `http://localhost:${PORT}/api/auth/wechat/callback`;
 const WECHAT_STATE_TTL_MS = 10 * 60 * 1000;
+const MARKET_DATA_BACKEND = process.env.MARKET_DATA_BACKEND || (process.env.NODE_ENV === 'test' ? 'file' : 'postgres');
+const MARKET_DATABASE_URL = process.env.MARKET_DATABASE_URL || process.env.DATABASE_URL || '';
+const marketDb = MARKET_DATA_BACKEND === 'postgres' && MARKET_DATABASE_URL
+  ? new pg.Pool({ connectionString: MARKET_DATABASE_URL, max: Number(process.env.MARKET_DB_POOL_SIZE || 4) })
+  : null;
 await mkdir(join(ROOT, 'data'), { recursive: true });
 
 const db = new DatabaseSync(DB_PATH);
@@ -69,9 +75,46 @@ const MARKET_ENVIRONMENT_INDICES = [
   ['港股', '恒生指数', 'HSI'], ['港股', '恒生科技', 'HKTECH'], ['美股', '纳斯达克指数', 'IXIC'], ['美股', '标普500', 'SPX']
 ];
 
+function marketDatabaseUnavailable(message, cause) {
+  const unavailable = new Error(message);
+  unavailable.statusCode = 503;
+  unavailable.cause = cause;
+  return unavailable;
+}
+
+async function marketSnapshot(dataset, fallbackPath) {
+  if (MARKET_DATA_BACKEND === 'file') return JSON.parse(await readFile(fallbackPath, 'utf8'));
+  if (!marketDb) throw marketDatabaseUnavailable('行情数据库未配置');
+  let result;
+  try {
+    result = await marketDb.query('SELECT payload FROM market_runtime_snapshots WHERE dataset = $1', [dataset]);
+  } catch (error) {
+    throw marketDatabaseUnavailable('行情数据库暂时不可用', error);
+  }
+  if (!result.rowCount) throw marketDatabaseUnavailable(`${dataset} 行情快照尚未入库`);
+  return result.rows[0].payload;
+}
+
 let dataMtime = 0;
 let rows = [];
 async function loadRows() {
+  if (MARKET_DATA_BACKEND === 'postgres') {
+    if (!marketDb) throw marketDatabaseUnavailable('行情数据库未配置');
+    let result;
+    try {
+      result = await marketDb.query(`
+        SELECT trade_date::text AS date, score_qvix AS "QVIX", score_strength AS "股价强度",
+          score_futures AS "期货升贴水", score_volume AS "成交量", score_safety AS "避险需求",
+          our_index, our_zone, shanghai_index, raw_qvix, raw_strength, raw_futures, raw_volume, raw_safety
+        FROM market_fear_greed_daily
+        ORDER BY trade_date
+      `);
+    } catch (error) {
+      throw marketDatabaseUnavailable('行情数据库暂时不可用', error);
+    }
+    if (!result.rowCount) throw marketDatabaseUnavailable('恐惧贪婪行情尚未入库');
+    return result.rows.map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, key === 'date' || key === 'our_zone' ? value : Number(value)])));
+  }
   const info = await stat(DATA_PATH);
   if (!rows.length || info.mtimeMs !== dataMtime) {
     rows = JSON.parse(await readFile(DATA_PATH, 'utf8')).map((row) => Object.fromEntries(Object.entries(row).map(([key, value]) => [key, key === 'date' || key === 'our_zone' ? value : Number(value)])));
@@ -81,20 +124,20 @@ async function loadRows() {
 }
 
 async function marketEnvironment() {
-  const payload = JSON.parse(await readFile(MARKET_ENVIRONMENT_PATH, 'utf8'));
+  const payload = await marketSnapshot('market-environment', MARKET_ENVIRONMENT_PATH);
   if (!Array.isArray(payload.indices) || payload.indices.length !== MARKET_ENVIRONMENT_INDICES.length) throw new Error('市场环境数据不完整');
   if (payload.indices.some((item, index) => item.group !== MARKET_ENVIRONMENT_INDICES[index][0] || item.name !== MARKET_ENVIRONMENT_INDICES[index][1] || item.code !== MARKET_ENVIRONMENT_INDICES[index][2] || item.history?.length !== 250)) throw new Error('市场环境指数定义不正确');
   return payload;
 }
 
 async function marketStyle() {
-  const payload = JSON.parse(await readFile(MARKET_STYLE_PATH, 'utf8'));
+  const payload = await marketSnapshot('market-style', MARKET_STYLE_PATH);
   if (!Array.isArray(payload.indices) || payload.indices.length !== 8) throw new Error('市场风格数据不完整');
   return payload;
 }
 
 async function industryPrice() {
-  const payload = JSON.parse(await readFile(INDUSTRY_PRICE_PATH, 'utf8'));
+  const payload = await marketSnapshot('industry-price', INDUSTRY_PRICE_PATH);
   if (!Array.isArray(payload.indices) || payload.indices.length !== 31) throw new Error('行业价格指数数据不完整');
   if (!Array.isArray(payload.marketIndices) || payload.marketIndices.length !== A_SHARE_INDEX_UNIVERSE.length) throw new Error('行业价格市场指数数据不完整');
   if (payload.marketIndices.some((item, index) => item.name !== A_SHARE_INDEX_UNIVERSE[index][0] || item.code !== A_SHARE_INDEX_UNIVERSE[index][1] || item.history?.length !== 250)) throw new Error('行业价格市场指数定义不正确');
@@ -102,7 +145,7 @@ async function industryPrice() {
 }
 
 async function marketVolume() {
-  const payload = JSON.parse(await readFile(MARKET_VOLUME_PATH, 'utf8'));
+  const payload = await marketSnapshot('market-volume', MARKET_VOLUME_PATH);
   const expected = [
     ['沪深300', '000300.SH'], ['中证500', '000905.SH'], ['中证1000', '000852.SH'], ['中证2000', '932000.CSI'], ['3800以外', 'OTHER']
   ];
@@ -112,7 +155,7 @@ async function marketVolume() {
 }
 
 async function marketVolatility() {
-  const payload = JSON.parse(await readFile(MARKET_VOLATILITY_PATH, 'utf8'));
+  const payload = await marketSnapshot('market-volatility', MARKET_VOLATILITY_PATH);
   if (!Array.isArray(payload.indexVolatility) || payload.indexVolatility.length !== A_SHARE_INDEX_UNIVERSE.length || !Array.isArray(payload.crossSectionVolatility) || payload.crossSectionVolatility.length !== A_SHARE_INDEX_UNIVERSE.length) throw new Error('市场波动率数据不完整');
   for (const group of [payload.indexVolatility, payload.crossSectionVolatility]) {
     if (group.some((item, index) => item.name !== A_SHARE_INDEX_UNIVERSE[index][0] || item.code !== A_SHARE_INDEX_UNIVERSE[index][1] || item.history?.length !== 250)) throw new Error('市场波动率指数定义不正确');
@@ -121,7 +164,7 @@ async function marketVolatility() {
 }
 
 async function marketTurnover() {
-  const payload = JSON.parse(await readFile(MARKET_TURNOVER_PATH, 'utf8'));
+  const payload = await marketSnapshot('market-turnover', MARKET_TURNOVER_PATH);
   const expected = A_SHARE_INDEX_UNIVERSE;
   if (!Array.isArray(payload.indices) || payload.indices.length !== expected.length) throw new Error('市场换手率数据不完整');
   if (payload.indices.some((item, index) => item.name !== expected[index][0] || item.code !== expected[index][1] || item.history?.length !== 250)) throw new Error('市场换手率指数定义不正确');
@@ -129,7 +172,7 @@ async function marketTurnover() {
 }
 
 async function marketBreadth() {
-  const payload = JSON.parse(await readFile(MARKET_BREADTH_PATH, 'utf8'));
+  const payload = await marketSnapshot('market-breadth', MARKET_BREADTH_PATH);
   const expected = A_SHARE_INDEX_UNIVERSE;
   if (!Array.isArray(payload.groups) || payload.groups.length !== expected.length) throw new Error('成分股涨跌分布数据不完整');
   if (payload.groups.some((item, index) => item.name !== expected[index][0] || item.code !== expected[index][1] || item.distribution?.length !== 22)) throw new Error('成分股涨跌分布定义不正确');
@@ -141,30 +184,34 @@ const FACTOR_KEYS = ['size', 'nonlinearSize', 'beta', 'momentum', 'residualVolat
 let factorExposureMtime = 0;
 let factorExposureCache = null;
 async function factorExposure() {
-  let info;
-  try {
-    info = await stat(FACTOR_EXPOSURE_PATH);
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      const unavailable = new Error('多因子快照尚未生成');
-      unavailable.statusCode = 503;
-      throw unavailable;
+  if (MARKET_DATA_BACKEND === 'postgres') {
+    factorExposureCache = await marketSnapshot('factor-exposure', FACTOR_EXPOSURE_PATH);
+  } else {
+    let info;
+    try {
+      info = await stat(FACTOR_EXPOSURE_PATH);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        const unavailable = new Error('多因子快照尚未生成');
+        unavailable.statusCode = 503;
+        throw unavailable;
+      }
+      throw error;
     }
-    throw error;
+    if (!factorExposureCache || info.mtimeMs !== factorExposureMtime) {
+      factorExposureCache = JSON.parse(await readFile(FACTOR_EXPOSURE_PATH, 'utf8'));
+      factorExposureMtime = info.mtimeMs;
+    }
   }
-  if (!factorExposureCache || info.mtimeMs !== factorExposureMtime) {
-    const payload = JSON.parse(await readFile(FACTOR_EXPOSURE_PATH, 'utf8'));
-    if (payload.schemaVersion !== 1 || !/^\d{4}-\d{2}-\d{2}$/.test(payload.asOf || '')) throw new Error('多因子数据版本或日期无效');
-    if (!Array.isArray(payload.factors) || payload.factors.length !== 16 || payload.factors.some((item, index) => item.key !== FACTOR_KEYS[index] || !Number.isFinite(item.coverage) || item.coverage < 0 || item.coverage > 1)) throw new Error('多因子定义不完整');
-    if (!Array.isArray(payload.indices) || payload.indices.length !== 4 || payload.indices.some((item) => !item.exposures || !item.coverages || FACTOR_KEYS.some((key) => item.exposures[key] !== null && !Number.isFinite(item.exposures[key])))) throw new Error('多因子指数数据不完整');
-    if (!Array.isArray(payload.distributions) || payload.distributions.length !== 16 || payload.distributions.some((item, index) => item.key !== FACTOR_KEYS[index] || item.bins?.length !== 6 || item.bins.some((bin) => typeof bin.label !== 'string' || !Number.isInteger(bin.count) || bin.count < 0))) throw new Error('多因子分布数据不完整');
-    if (!Array.isArray(payload.industries) || !payload.industries.length || !Array.isArray(payload.stockTableFactors) || payload.stockTableFactors.some((key) => !FACTOR_KEYS.includes(key))) throw new Error('多因子行业或明细定义不完整');
-    if (!payload.model?.disclaimer?.includes('非 MSCI Barra 官方模型') || !Array.isArray(payload.quality?.warnings)) throw new Error('多因子声明或质量信息不完整');
-    if (!Array.isArray(payload.stocks) || payload.stocks.length > 500 || payload.stocks.some((item) => typeof item.code !== 'string' || typeof item.name !== 'string' || !item.exposures) || !Array.isArray(payload.heatmap)) throw new Error('多因子明细数据无效');
-    factorExposureCache = payload;
-    factorExposureMtime = info.mtimeMs;
-  }
-  return factorExposureCache;
+  const payload = factorExposureCache;
+  if (payload.schemaVersion !== 1 || !/^\d{4}-\d{2}-\d{2}$/.test(payload.asOf || '')) throw new Error('多因子数据版本或日期无效');
+  if (!Array.isArray(payload.factors) || payload.factors.length !== 16 || payload.factors.some((item, index) => item.key !== FACTOR_KEYS[index] || !Number.isFinite(item.coverage) || item.coverage < 0 || item.coverage > 1)) throw new Error('多因子定义不完整');
+  if (!Array.isArray(payload.indices) || payload.indices.length !== 4 || payload.indices.some((item) => !item.exposures || !item.coverages || FACTOR_KEYS.some((key) => item.exposures[key] !== null && !Number.isFinite(item.exposures[key])))) throw new Error('多因子指数数据不完整');
+  if (!Array.isArray(payload.distributions) || payload.distributions.length !== 16 || payload.distributions.some((item, index) => item.key !== FACTOR_KEYS[index] || item.bins?.length !== 6 || item.bins.some((bin) => typeof bin.label !== 'string' || !Number.isInteger(bin.count) || bin.count < 0))) throw new Error('多因子分布数据不完整');
+  if (!Array.isArray(payload.industries) || !payload.industries.length || !Array.isArray(payload.stockTableFactors) || payload.stockTableFactors.some((key) => !FACTOR_KEYS.includes(key))) throw new Error('多因子行业或明细定义不完整');
+  if (!payload.model?.disclaimer?.includes('非 MSCI Barra 官方模型') || !Array.isArray(payload.quality?.warnings)) throw new Error('多因子声明或质量信息不完整');
+  if (!Array.isArray(payload.stocks) || payload.stocks.length > 500 || payload.stocks.some((item) => typeof item.code !== 'string' || typeof item.name !== 'string' || !item.exposures) || !Array.isArray(payload.heatmap)) throw new Error('多因子明细数据无效');
+  return payload;
 }
 
 function zone(score) {

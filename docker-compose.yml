@@ -1,7 +1,37 @@
 services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: traderoff-postgres
+    environment:
+      POSTGRES_DB: traderoff
+      POSTGRES_USER: traderoff
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - effective_cache_size=384MB
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U traderoff -d traderoff"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
   traderoff:
     build: .
     container_name: traderoff
+    depends_on:
+      postgres:
+        condition: service_healthy
     expose:
       - "8788"
     volumes:
@@ -12,7 +42,8 @@ services:
       WECHAT_APP_ID: ${WECHAT_APP_ID:-}
       WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
       WECHAT_REDIRECT_URI: ${WECHAT_REDIRECT_URI:-https://${TRADEROFF_DOMAIN:-localhost}/api/auth/wechat/callback}
-      TUSHARE_TOKEN: ${TUSHARE_TOKEN}
+      MARKET_DATA_BACKEND: postgres
+      MARKET_DATABASE_URL: postgresql://traderoff:${POSTGRES_PASSWORD}@postgres:5432/traderoff
       MARKET_ENVIRONMENT_DATA: /app/data/market_environment_runtime.json
       MARKET_STYLE_DATA: /app/data/market_style_runtime.json
       INDUSTRY_PRICE_DATA: /app/data/industry_price_runtime.json
@@ -21,6 +52,21 @@ services:
       MARKET_TURNOVER_DATA: /app/data/market_turnover_runtime.json
       MARKET_BREADTH_DATA: /app/data/market_breadth_runtime.json
       FACTOR_EXPOSURE_DATA: /app/data/factor_exposure_runtime.json
+    restart: unless-stopped
+
+  market-updater:
+    build: .
+    container_name: traderoff-market-updater
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["/app/schedule-market-refresh.sh"]
+    volumes:
+      - ./data:/app/data
+    environment:
+      TUSHARE_TOKEN: ${TUSHARE_TOKEN}
+      FEAR_GREED_DATA_DIR: /app/data
+      MARKET_DATABASE_URL: postgresql://traderoff:${POSTGRES_PASSWORD}@postgres:5432/traderoff
     restart: unless-stopped
 
   caddy:
@@ -41,5 +87,6 @@ services:
     restart: unless-stopped
 
 volumes:
+  postgres_data:
   caddy_data:
   caddy_config:
