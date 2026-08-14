@@ -61,6 +61,14 @@ const INDICATORS = {
   safety: { rawColumn: 'raw_safety', factor: 100, precision: 2, unit: '%', name: '避险需求', short: '股债收益差', color: '#30CB13', direction: '正向指标', source: 'Tushare · 沪深300与中债综合指数', description: '直接显示沪深 300 的 20 日收益率减去中债综合指数 20 日收益率。' }
 };
 
+const A_SHARE_INDEX_UNIVERSE = [
+  ['沪深300', '000300.SH'], ['中证500', '000905.SH'], ['中证1000', '000852.SH'], ['中证2000', '932000.CSI'], ['中证红利', '000922.CSI'], ['创业板指', '399006.SZ'], ['科创50', '000688.SH']
+];
+const MARKET_ENVIRONMENT_INDICES = [
+  ...A_SHARE_INDEX_UNIVERSE.map(([name, code]) => ['A股', name, code]),
+  ['港股', '恒生指数', 'HSI'], ['港股', '恒生科技', 'HKTECH'], ['美股', '纳斯达克指数', 'IXIC'], ['美股', '标普500', 'SPX']
+];
+
 let dataMtime = 0;
 let rows = [];
 async function loadRows() {
@@ -74,7 +82,8 @@ async function loadRows() {
 
 async function marketEnvironment() {
   const payload = JSON.parse(await readFile(MARKET_ENVIRONMENT_PATH, 'utf8'));
-  if (!Array.isArray(payload.indices) || payload.indices.length !== 12) throw new Error('市场环境数据不完整');
+  if (!Array.isArray(payload.indices) || payload.indices.length !== MARKET_ENVIRONMENT_INDICES.length) throw new Error('市场环境数据不完整');
+  if (payload.indices.some((item, index) => item.group !== MARKET_ENVIRONMENT_INDICES[index][0] || item.name !== MARKET_ENVIRONMENT_INDICES[index][1] || item.code !== MARKET_ENVIRONMENT_INDICES[index][2] || item.history?.length !== 250)) throw new Error('市场环境指数定义不正确');
   return payload;
 }
 
@@ -87,6 +96,8 @@ async function marketStyle() {
 async function industryPrice() {
   const payload = JSON.parse(await readFile(INDUSTRY_PRICE_PATH, 'utf8'));
   if (!Array.isArray(payload.indices) || payload.indices.length !== 31) throw new Error('行业价格指数数据不完整');
+  if (!Array.isArray(payload.marketIndices) || payload.marketIndices.length !== A_SHARE_INDEX_UNIVERSE.length) throw new Error('行业价格市场指数数据不完整');
+  if (payload.marketIndices.some((item, index) => item.name !== A_SHARE_INDEX_UNIVERSE[index][0] || item.code !== A_SHARE_INDEX_UNIVERSE[index][1] || item.history?.length !== 250)) throw new Error('行业价格市场指数定义不正确');
   return payload;
 }
 
@@ -102,14 +113,16 @@ async function marketVolume() {
 
 async function marketVolatility() {
   const payload = JSON.parse(await readFile(MARKET_VOLATILITY_PATH, 'utf8'));
-  if (!Array.isArray(payload.indexVolatility) || payload.indexVolatility.length !== 5 || !Array.isArray(payload.crossSectionVolatility) || payload.crossSectionVolatility.length !== 4) throw new Error('市场波动率数据不完整');
-  if (payload.indexVolatility.some((item) => item.history?.length !== 250) || payload.crossSectionVolatility.some((item) => item.history?.length !== 250)) throw new Error('市场波动率历史数据不完整');
+  if (!Array.isArray(payload.indexVolatility) || payload.indexVolatility.length !== A_SHARE_INDEX_UNIVERSE.length || !Array.isArray(payload.crossSectionVolatility) || payload.crossSectionVolatility.length !== A_SHARE_INDEX_UNIVERSE.length) throw new Error('市场波动率数据不完整');
+  for (const group of [payload.indexVolatility, payload.crossSectionVolatility]) {
+    if (group.some((item, index) => item.name !== A_SHARE_INDEX_UNIVERSE[index][0] || item.code !== A_SHARE_INDEX_UNIVERSE[index][1] || item.history?.length !== 250)) throw new Error('市场波动率指数定义不正确');
+  }
   return payload;
 }
 
 async function marketTurnover() {
   const payload = JSON.parse(await readFile(MARKET_TURNOVER_PATH, 'utf8'));
-  const expected = [['沪深300', '000300.SH'], ['中证500', '000905.SH'], ['中证1000', '000852.SH'], ['中证2000', '932000.CSI'], ['创业板', '399006.SZ'], ['科创50', '000688.SH']];
+  const expected = A_SHARE_INDEX_UNIVERSE;
   if (!Array.isArray(payload.indices) || payload.indices.length !== expected.length) throw new Error('市场换手率数据不完整');
   if (payload.indices.some((item, index) => item.name !== expected[index][0] || item.code !== expected[index][1] || item.history?.length !== 250)) throw new Error('市场换手率指数定义不正确');
   return payload;
@@ -117,7 +130,7 @@ async function marketTurnover() {
 
 async function marketBreadth() {
   const payload = JSON.parse(await readFile(MARKET_BREADTH_PATH, 'utf8'));
-  const expected = [['全A', 'ALL_A'], ['沪深300', '000300.SH'], ['中证500', '000905.SH'], ['中证1000', '000852.SH'], ['中证2000', '932000.CSI'], ['创业板', '399006.SZ'], ['科创50', '000688.SH']];
+  const expected = A_SHARE_INDEX_UNIVERSE;
   if (!Array.isArray(payload.groups) || payload.groups.length !== expected.length) throw new Error('成分股涨跌分布数据不完整');
   if (payload.groups.some((item, index) => item.name !== expected[index][0] || item.code !== expected[index][1] || item.distribution?.length !== 22)) throw new Error('成分股涨跌分布定义不正确');
   if (payload.groups.some((item) => item.rise + item.flat + item.fall !== item.count || item.distribution.reduce((sum, bin) => sum + Number(bin.count), 0) !== item.count)) throw new Error('成分股涨跌分布统计不完整');

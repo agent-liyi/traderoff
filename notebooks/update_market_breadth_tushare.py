@@ -18,12 +18,12 @@ RAW_DIR = DATA_DIR / "tushare_raw"
 OUTPUT_PATH = DATA_DIR / "market_breadth_runtime.json"
 REQUEST_INTERVAL = 0.13
 INDICES = [
-    ("全A", "ALL_A"),
     ("沪深300", "000300.SH"),
     ("中证500", "000905.SH"),
     ("中证1000", "000852.SH"),
     ("中证2000", "932000.CSI"),
-    ("创业板", "399006.SZ"),
+    ("中证红利", "000922.CSI"),
+    ("创业板指", "399006.SZ"),
     ("科创50", "000688.SH"),
 ]
 BIN_EDGES = list(range(-20, 21, 2))
@@ -153,12 +153,11 @@ def main():
     pro = ts.pro_api()
     trade_date = latest_open_date(pro)
     print(f"Tushare-only breadth update: {trade_date}", flush=True)
-    print("[1/3] 获取全A个股涨跌幅", flush=True)
+    print("[1/3] 获取A股个股涨跌幅", flush=True)
     daily = fetch_daily_changes(pro, trade_date)
-    groups = [build_group("全A", "ALL_A", daily)]
-    print(f"  全A: {len(daily)} 只", flush=True)
+    groups = []
     print("[2/3] 获取主要指数成分股快照", flush=True)
-    for name, code in INDICES[1:]:
+    for name, code in INDICES:
         members, snapshot = fetch_members(pro, code, trade_date)
         group = build_group(name, code, daily, members, snapshot)
         if group["count"] < max(20, len(members) * 0.8):
@@ -171,7 +170,7 @@ def main():
     payload = {
         "asOf": datetime.strptime(trade_date, "%Y%m%d").strftime("%Y-%m-%d"),
         "generatedAt": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
-        "definition": "使用 Tushare daily.pct_chg 按2个百分点左闭右开区间统计；全A为沪深两市普通A股，指数使用最近可得的 index_weight 成分股快照。",
+        "definition": "使用 Tushare daily.pct_chg 按2个百分点左闭右开区间统计；各指数使用最近可得的 index_weight 成分股快照。",
         "groups": groups,
     }
     DATA_DIR.mkdir(parents=True, exist_ok=True)

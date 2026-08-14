@@ -16,6 +16,15 @@ import tushare as ts
 DATA_DIR = Path(os.getenv("FEAR_GREED_DATA_DIR", "/workspace/data"))
 OUTPUT_PATH = DATA_DIR / "industry_price_runtime.json"
 REQUEST_INTERVAL = 0.15
+MARKET_INDICES = [
+    ("沪深300", "000300.SH"),
+    ("中证500", "000905.SH"),
+    ("中证1000", "000852.SH"),
+    ("中证2000", "932000.CSI"),
+    ("中证红利", "000922.CSI"),
+    ("创业板指", "399006.SZ"),
+    ("科创50", "000688.SH"),
+]
 
 
 def retry(name, request, attempts=4):
@@ -110,10 +119,25 @@ def main():
         rows.append(summarize(frame, row.industry_name, row.index_code))
         print(f"  [{index}/31] {rows[-1]['name']}: {rows[-1]['date']}", flush=True)
 
+    market_indices = []
+    for name, code in MARKET_INDICES:
+        frame = retry(
+            name,
+            lambda code=code: pro.index_daily(
+                ts_code=code,
+                start_date=start,
+                end_date=end,
+                fields="ts_code,trade_date,close,amount",
+            ),
+        )
+        market_indices.append(summarize(frame, name, code))
+        print(f"  {name} 市场对照: {market_indices[-1]['date']}", flush=True)
+
     payload = {
-        "asOf": max(row["date"] for row in rows),
+        "asOf": max(row["date"] for row in [*rows, *market_indices]),
         "generatedAt": datetime.now(ZoneInfo("Asia/Shanghai")).isoformat(timespec="seconds"),
         "indices": rows,
+        "marketIndices": market_indices,
     }
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     temporary = OUTPUT_PATH.with_suffix(".tmp")

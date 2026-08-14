@@ -20,19 +20,17 @@ LOOKBACK = 250
 INDEX_WINDOW = 20
 CROSS_SECTION_WINDOW = 5
 REQUEST_INTERVAL = 0.13
-INDEX_SERIES = [
+INDEX_UNIVERSE = [
     ("沪深300", "000300.SH"),
     ("中证500", "000905.SH"),
     ("中证1000", "000852.SH"),
     ("中证2000", "932000.CSI"),
-    ("中证全指", "000985.CSI"),
+    ("中证红利", "000922.CSI"),
+    ("创业板指", "399006.SZ"),
+    ("科创50", "000688.SH"),
 ]
-CROSS_SECTION = [
-    ("沪深300", "000300.SH"),
-    ("中证500", "000905.SH"),
-    ("中证1000", "000852.SH"),
-    ("中证1800", "CSI1800"),
-]
+INDEX_SERIES = INDEX_UNIVERSE
+CROSS_SECTION = INDEX_UNIVERSE
 
 
 def retry(name, request, attempts=4):
@@ -110,7 +108,7 @@ def month_windows(start_date, end_date):
 def fetch_memberships(pro, start_date, end_date):
     snapshots = {}
     monthly_start = (datetime.strptime(start_date, "%Y%m%d") - timedelta(days=40)).strftime("%Y%m%d")
-    for name, code in CROSS_SECTION[:3]:
+    for name, code in CROSS_SECTION:
         frames = []
         for window_start, window_end in month_windows(monthly_start, end_date):
             frame = retry(
@@ -173,18 +171,13 @@ def index_volatility(pro, start_date, end_date):
 def cross_section_volatility(daily, snapshots, dates):
     rows = []
     for date, day in daily.groupby("trade_date", sort=True):
-        members = {code: active_members(snapshots, code, date) for _, code in CROSS_SECTION[:3]}
+        members = {code: active_members(snapshots, code, date) for _, code in CROSS_SECTION}
         values = {}
-        for name, code in CROSS_SECTION[:3]:
+        for name, code in CROSS_SECTION:
             selected = day.loc[day["ts_code"].isin(members[code]), "pct_chg"]
-            if len(selected) < 50:
-                raise RuntimeError(f"{name} has only {len(selected)} valid returns on {date}")
+            if len(selected) < max(20, len(members[code]) * 0.8):
+                raise RuntimeError(f"{name} has only {len(selected)}/{len(members[code])} valid returns on {date}")
             values[code] = float(selected.std(ddof=1))
-        all_members = set().union(*members.values())
-        selected = day.loc[day["ts_code"].isin(all_members), "pct_chg"]
-        if len(selected) < 100:
-            raise RuntimeError(f"中证1800 has only {len(selected)} valid returns on {date}")
-        values["CSI1800"] = float(selected.std(ddof=1))
         rows.append({"date": date, **values})
     frame = pd.DataFrame(rows).sort_values("date")
     result = []

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="A股 · 市场 CT 机与五项市场情绪指标看板">
   <title>A股 · 市场 CT 机</title>
-  <link rel="stylesheet" href="/styles.css?v=18">
+  <link rel="stylesheet" href="/styles.css?v=19">
 </head>
 <body>
   <header class="topbar">
@@ -143,6 +143,30 @@
         <div><h1>行业价格指数</h1><p class="intro">申万一级行业区间表现与成交额 · 数据截至 <b id="industryDate">--</b></p></div>
         <button class="icon-button" id="industryRefresh" title="刷新数据" aria-label="刷新行业价格指数数据"><i data-lucide="refresh-cw"></i></button>
       </header>
+      <section class="industry-market-summary" aria-labelledby="industryMarketTitle">
+        <div class="environment-trend-head">
+          <div><p class="eyebrow">MARKET CONTEXT</p><h2 id="industryMarketTitle">七大市场指数对照</h2><p>用于观察行业表现所处的市场环境；成交额仅在 Tushare 指数日线提供时展示。</p></div>
+        </div>
+        <div class="environment-table-wrap industry-market-table-wrap">
+          <table class="environment-table industry-market-table">
+            <thead><tr><th>指数</th><th>最近一周</th><th>近一个月</th><th>今年以来</th><th>最近一年</th><th>当日成交额</th></tr></thead>
+            <tbody id="industryMarketRows"><tr><td colspan="6" class="table-loading">正在加载市场指数对照...</td></tr></tbody>
+          </table>
+          <footer><span>数据来源：Tushare Pro · 指数日线</span><span>肥尾不肥</span></footer>
+        </div>
+      </section>
+      <section class="industry-market-trend" aria-labelledby="industryMarketTrendTitle">
+        <div class="environment-trend-head">
+          <div><p class="eyebrow">250 TRADING DAYS</p><h2 id="industryMarketTrendTitle">七大市场指数比较走势</h2><p>以各指数250个交易日前的收盘价为基准，展示累计收益率。</p></div>
+        </div>
+        <div class="environment-trend-chart-wrap">
+          <div id="industryMarketTrendChart" class="industry-market-trend-chart" aria-label="七大市场指数250个交易日累计收益率走势"></div>
+          <div class="chart-footer"><span id="industryMarketTrendDate">--</span><span>肥尾不肥</span></div>
+        </div>
+      </section>
+      <section class="industry-core-content" aria-labelledby="industryCoreTitle">
+        <div class="environment-trend-head"><div><p class="eyebrow">SHENWAN L1</p><h2 id="industryCoreTitle">申万一级行业表现</h2></div></div>
+      </section>
       <div class="environment-table-wrap industry-table-wrap">
         <table class="environment-table industry-table">
           <thead><tr><th>证券简称</th><th>最近一周</th><th>近一个月</th><th>今年以来</th><th>最近一年</th><th>当日成交额</th><th>当周走势</th></tr></thead>
@@ -239,19 +263,19 @@
     </section>
     <section class="breadth-view hidden" id="breadthView">
       <header class="environment-head">
-        <div><h1>成分股涨跌分布</h1><p class="intro">全A及主要指数成分股的单日涨跌幅分布 · 数据截至 <b id="breadthDate">--</b></p></div>
+        <div><h1>成分股涨跌分布</h1><p class="intro">七大市场指数成分股的单日涨跌幅分布 · 数据截至 <b id="breadthDate">--</b></p></div>
         <button class="icon-button" id="breadthRefresh" title="刷新数据" aria-label="刷新成分股涨跌分布数据"><i data-lucide="refresh-cw"></i></button>
       </header>
       <section class="breadth-trend" aria-labelledby="breadthTrendTitle">
         <div class="environment-trend-head">
           <div><p class="eyebrow">DAILY DISTRIBUTION</p><h2 id="breadthTrendTitle">成分股涨跌幅度分布</h2><p id="breadthDescription">--</p></div>
           <div class="breadth-group-control" role="group" aria-label="涨跌分布范围">
-            <button class="active" data-breadth-group="ALL_A">全A</button>
-            <button data-breadth-group="000300.SH">沪深300</button>
+            <button class="active" data-breadth-group="000300.SH">沪深300</button>
             <button data-breadth-group="000905.SH">中证500</button>
             <button data-breadth-group="000852.SH">中证1000</button>
             <button data-breadth-group="932000.CSI">中证2000</button>
-            <button data-breadth-group="399006.SZ">创业板</button>
+            <button data-breadth-group="000922.CSI">中证红利</button>
+            <button data-breadth-group="399006.SZ">创业板指</button>
             <button data-breadth-group="000688.SH">科创50</button>
           </div>
         </div>
@@ -326,6 +350,6 @@
 
   <script src="/vendor/echarts.min.js"></script>
   <script src="/vendor/lucide.min.js"></script>
-  <script type="module" src="/app.js?v=24"></script>
+  <script type="module" src="/app.js?v=25"></script>
 </body>
 </html>
