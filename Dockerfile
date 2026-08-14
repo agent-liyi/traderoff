@@ -17,6 +17,7 @@ COPY web/server.js ./
 COPY web/tests ./tests
 COPY web/static ./static
 COPY notebooks/ /app/notebooks/
+COPY db/ /app/db/
 COPY start-traderoff.sh /app/start-traderoff.sh
 COPY refresh-market-data.sh /app/refresh-market-data.sh
 COPY schedule-market-refresh.sh /app/schedule-market-refresh.sh

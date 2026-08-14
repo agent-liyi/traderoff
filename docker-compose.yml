@@ -37,6 +37,7 @@ services:
     volumes:
       - ./data:/app/data
       - ./web/data:/app/web/data
+      - ./db:/app/db:ro
     environment:
       WECHAT_AUTH_MODE: ${WECHAT_AUTH_MODE:-development}
       WECHAT_APP_ID: ${WECHAT_APP_ID:-}
@@ -63,6 +64,7 @@ services:
     command: ["/app/schedule-market-refresh.sh"]
     volumes:
       - ./data:/app/data
+      - ./db:/app/db:ro
     environment:
       TUSHARE_TOKEN: ${TUSHARE_TOKEN}
       FEAR_GREED_DATA_DIR: /app/data
