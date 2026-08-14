@@ -225,11 +225,17 @@ docker compose logs --tail=100 caddy
 docker compose up -d --force-recreate
 ```
 
-更新镜像或拉取仓库代码前，先检查运行时覆盖与新的 Compose 配置是否仍兼容：
+日常更新代码时，`web/`、`notebooks/` 等运行时代码已通过 `docker-compose.override.yml` 挂载，**无需重建镜像**。先检查运行时覆盖与新的 Compose 配置是否兼容，再用 `--no-build` 重建容器：
 
 ```sh
 git pull --ff-only
 docker compose config >/dev/null
+docker compose up -d --no-build --force-recreate
+```
+
+仅当 `package.json` / `package-lock.json` / `requirements.txt` / `Dockerfile` 变化（依赖清单或镜像定义）时，才需要重建镜像：
+
+```sh
 docker compose up -d --build
 ```
 
