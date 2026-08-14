@@ -28,6 +28,7 @@ services:
     restart: unless-stopped
 
   traderoff:
+    image: traderoff-traderoff:latest
     build: .
     container_name: traderoff
     depends_on:
@@ -57,6 +58,7 @@ services:
     restart: unless-stopped
 
   market-updater:
+    image: traderoff-traderoff:latest
     build: .
     container_name: traderoff-market-updater
     depends_on:
