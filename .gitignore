@@ -11,3 +11,7 @@ web/node_modules/
 __pycache__/
 *.pyc
 .DS_Store
+
+# Reasonix tool metadata
+.reasonix/
+reasonix.toml

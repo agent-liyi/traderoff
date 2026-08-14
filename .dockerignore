@@ -1,6 +1,7 @@
 node_modules
 .git
 .DS_Store
+data/
 web/data
 __pycache__
 *.pyc
