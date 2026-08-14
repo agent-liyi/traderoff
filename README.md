@@ -12,7 +12,7 @@ For production HTTPS deployment, low-memory server recovery, and verification co
 - Market environment table and normalized 250-trading-day relative-performance charts for A shares, Hong Kong, and US markets.
 - A 16-factor CNLT-style reference profile for the CSI 1800 reference universe, including coverage, index comparison, cross-sectional distributions, an SW2021 industry heatmap, and representative stocks.
 - The factor module uses independently designed transparent proxies and is not an MSCI Barra official model. Missing financial data remains null and is disclosed through warnings.
-- Tushare refresh worker runs at startup and checks for updates every five minutes. The higher-cost factor generator is opt-in and is not part of startup refresh.
+- A dedicated `market-updater` container refreshes all nine datasets (including the 16-factor profile) on every weekday at 21:10 Asia/Shanghai time. The web service starts independently and never waits for a refresh.
 - China market close gate: before 21:00 Asia/Shanghai time, the refresh uses the prior open trading day.
 - Optional WeChat OAuth login controls access to raw sentiment factor values.
 
@@ -62,7 +62,7 @@ WECHAT_REDIRECT_URI=https://your-domain.example/api/auth/wechat/callback
 
 ## Development
 
-The dashboard server lives in `web/`. Run tests with:
+The dashboard server lives in `web/`. The tests read the generated `data/*.json` snapshots (file backend), which are not tracked in the repository. With `TUSHARE_TOKEN` set in `.env`, produce them once first — e.g. `docker compose run --rm market-updater /app/refresh-market-data.sh` — then run:
 
 ```sh
 cd web
@@ -70,16 +70,16 @@ npm ci
 npm test
 ```
 
-The Docker image includes Python, NumPy, Pandas, SciPy, and Tushare for the scheduled refresh tasks. Generate the opt-in factor snapshot from the repository root with:
+The Docker image includes Python, NumPy, Pandas, SciPy, and Tushare for the scheduled refresh tasks. You can also generate the factor snapshot manually from the repository root with:
 
 ```sh
 set -a; . ./.env; set +a
 FEAR_GREED_DATA_DIR="$PWD/data" python3 notebooks/update_factor_exposure_tushare.py
 ```
 
-The generator reuses `data/tushare_raw/equity_daily`. If financial API access is unavailable, it still writes a valid snapshot with null financial exposures and explicit `quality.warnings`; `start-traderoff.sh` does not invoke it.
+The generator reuses `data/tushare_raw/equity_daily`. If financial API access is unavailable, it still writes a valid snapshot with null financial exposures and explicit `quality.warnings`. It runs as part of the daily refresh batch; if it fails, that batch is not imported and the site keeps serving the last complete snapshot.
 
-After `docker compose up -d --build` has produced the runtime data, run the server tests inside the container with:
+After the runtime data has been produced (see above), run the server tests inside the container with:
 
 ```sh
 docker compose exec traderoff sh -lc 'cd /app/web && npm test'

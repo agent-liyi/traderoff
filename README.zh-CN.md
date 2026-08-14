@@ -12,7 +12,7 @@
 - A股、港股、美股主要指数的区间收益表与250个交易日归一化相对收益走势。
 - 中证1800参考股票池的16项CNLT风格多因子画像，包含数据覆盖率、主要指数暴露、截面分布、申万2021行业热力图和代表个股明细。
 - 多因子模块是独立构建的透明代理，非 MSCI Barra 官方模型；缺失财务数据保持为空并展示 warning，不插值伪造。
-- 容器启动时刷新 Tushare 数据，之后每5分钟检查一次更新。因子生成成本较高，不进入默认启动刷新链，需按需执行。
+- 独立的 `market-updater` 容器在每个工作日北京时间 21:10 刷新全部九份数据集（含 16 因子画像）。网站服务独立启动，不依赖任何刷新完成。
 - A股数据按中国市场收盘时间处理：北京时间21:00前使用最近一个已开市交易日的数据。
 - 可选的微信 OAuth 登录，用于控制五项情绪指标原始数值的查看权限。
 
@@ -64,7 +64,7 @@ WECHAT_REDIRECT_URI=https://your-domain.example/api/auth/wechat/callback
 
 ## 开发与测试
 
-前端服务位于 `web/`。可在本地安装依赖并执行测试：
+前端服务位于 `web/`。测试读取已生成的 `data/*.json` 快照（file 后端），这些文件不在仓库中。在 `.env` 中配置 `TUSHARE_TOKEN` 后，先执行一次刷新生成它们（例如 `docker compose run --rm market-updater /app/refresh-market-data.sh`），再安装依赖并运行测试：
 
 ```sh
 cd web
@@ -79,9 +79,9 @@ set -a; . ./.env; set +a
 FEAR_GREED_DATA_DIR="$PWD/data" python3 notebooks/update_factor_exposure_tushare.py
 ```
 
-财务接口权限不足时生成仍会完成，相关因子的覆盖率为零、指数暴露为 `null`，限制会记录在 `quality.warnings`。该脚本不会由 `start-traderoff.sh` 默认调用，因此失败不会阻塞服务。
+财务接口权限不足时生成仍会完成，相关因子的覆盖率为零、指数暴露为 `null`，限制会记录在 `quality.warnings`。该脚本作为每日批量刷新的一部分运行；若失败则当次不导入，网站继续提供上一份完整快照。
 
-启动服务并生成运行时数据后，也可以在容器内执行测试：
+生成运行时数据后（见上文），也可以在容器内执行测试：
 
 ```sh
 docker compose exec traderoff sh -lc 'cd /app/web && npm test'
