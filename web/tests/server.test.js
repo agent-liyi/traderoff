@@ -117,7 +117,7 @@ test('factor exposure returns the exact CNLT reference factor set and transparen
 });
 
 test('dashboard hides raw indicator values for anonymous visitors', async () => {
-  const result = await dashboard('1m');
+  const result = await dashboard('1y');
   assert.equal(result.indicators.length, 5);
   assert.ok(result.indicators.every((indicator) => indicator.value === 0 && indicator.average === 0));
   assert.equal(result.series.length, 250);
