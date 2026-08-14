@@ -6,6 +6,7 @@ services:
       POSTGRES_DB: traderoff
       POSTGRES_USER: traderoff
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_INITDB_ARGS: --encoding=UTF8 --locale=C.UTF-8
       PGDATA: /var/lib/postgresql/data/pgdata
     command:
       - postgres
