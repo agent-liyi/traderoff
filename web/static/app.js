@@ -745,5 +745,6 @@ window.addEventListener('resize', () => { state.charts.forEach((chart) => chart.
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#detailView').classList.contains('hidden')) closeDetail(); });
 
 initIcons();
+const yearEl = $('#siteYearYear'); if (yearEl) yearEl.textContent = String(new Date().getFullYear());
 await Promise.all([loadDashboard(), initAuth()]);
 showAuthResult();
