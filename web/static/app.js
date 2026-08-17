@@ -523,14 +523,14 @@ async function switchView(view) {
   if (view === 'turnover' && !state.turnover) await loadTurnover();
   if (view === 'breadth' && !state.breadth) await loadBreadth();
   if (view === 'factors' && !state.factors) await loadFactors();
-  if (view === 'environment') requestAnimationFrame(() => state.environmentTrendChart?.resize());
-  if (view === 'style') requestAnimationFrame(() => state.styleTrendChart?.resize());
-  if (view === 'industry') requestAnimationFrame(() => { state.industryTrendChart?.resize(); });
-  if (view === 'volume') requestAnimationFrame(() => { state.volumeAmountChart?.resize(); state.volumeShareChart?.resize(); });
-  if (view === 'volatility') requestAnimationFrame(() => { state.indexVolatilityChart?.resize(); state.crossVolatilityChart?.resize(); });
-  if (view === 'turnover') requestAnimationFrame(() => state.turnoverChart?.resize());
-  if (view === 'breadth') requestAnimationFrame(() => state.breadthChart?.resize());
-  if (view === 'factors') requestAnimationFrame(() => { state.factorIndexChart?.resize(); state.factorDistributionChart?.resize(); state.factorIndustryChart?.resize(); });
+  if (view === 'environment') setTimeout(() => state.environmentTrendChart?.resize(), 60);
+  if (view === 'style') setTimeout(() => state.styleTrendChart?.resize(), 60);
+  if (view === 'industry') setTimeout(() => { state.industryTrendChart?.resize(); }, 60);
+  if (view === 'volume') setTimeout(() => { state.volumeAmountChart?.resize(); state.volumeShareChart?.resize(); }, 60);
+  if (view === 'volatility') setTimeout(() => { state.indexVolatilityChart?.resize(); state.crossVolatilityChart?.resize(); }, 60);
+  if (view === 'turnover') setTimeout(() => state.turnoverChart?.resize(), 60);
+  if (view === 'breadth') setTimeout(() => state.breadthChart?.resize(), 60);
+  if (view === 'factors') setTimeout(() => { state.factorIndexChart?.resize(); state.factorDistributionChart?.resize(); state.factorIndustryChart?.resize(); }, 60);
   if (window.lucide) window.lucide.createIcons();
 }
 
