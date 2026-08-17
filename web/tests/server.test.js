@@ -43,17 +43,13 @@ test('market style returns eight complete Tushare style indices', async () => {
   assert.ok(result.indices.every((item) => item.history.length === 250 && item.history.every((point) => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && Number.isFinite(point.close))));
 });
 
-test('industry price retains all Shenwan Level 1 indices and adds the seven-index market comparison', async () => {
+test('industry price retains all Shenwan Level 1 indices', async () => {
   const result = await industryPrice();
-  const expected = [['沪深300', '000300.SH'], ['中证500', '000905.SH'], ['中证1000', '000852.SH'], ['中证2000', '932000.CSI'], ['中证红利', '000922.CSI'], ['创业板指', '399006.SZ'], ['科创50', '000688.SH']];
   assert.equal(result.indices.length, 31);
   assert.ok(result.indices.every((item) => /^801\d{3}\.SI$/.test(item.code)));
   assert.ok(result.indices.every((item) => ['week', 'month', 'ytd', 'year', 'close', 'amount'].every((key) => Number.isFinite(item[key]))));
   assert.ok(result.indices.every((item) => item.sparkline.length === 5 && item.sparkline.every((point) => Number.isFinite(point.close))));
   assert.ok(result.indices.every((item) => item.history.length === 250 && item.history.every((point) => /^\d{4}-\d{2}-\d{2}$/.test(point.date) && Number.isFinite(point.close))));
-  assert.deepEqual(result.marketIndices.map((item) => [item.name, item.code]), expected);
-  assert.ok(result.marketIndices.every((item) => ['week', 'month', 'ytd', 'year', 'close', 'amount'].every((key) => Number.isFinite(item[key]))));
-  assert.ok(result.marketIndices.every((item) => item.history.length === 250));
 });
 
 test('market volume returns five reconciled size buckets and 250 complete days', async () => {

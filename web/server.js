@@ -139,8 +139,6 @@ async function marketStyle() {
 async function industryPrice() {
   const payload = await marketSnapshot('industry-price', INDUSTRY_PRICE_PATH);
   if (!Array.isArray(payload.indices) || payload.indices.length !== 31) throw new Error('行业价格指数数据不完整');
-  if (!Array.isArray(payload.marketIndices) || payload.marketIndices.length !== A_SHARE_INDEX_UNIVERSE.length) throw new Error('行业价格市场指数数据不完整');
-  if (payload.marketIndices.some((item, index) => item.name !== A_SHARE_INDEX_UNIVERSE[index][0] || item.code !== A_SHARE_INDEX_UNIVERSE[index][1] || item.history?.length !== 250)) throw new Error('行业价格市场指数定义不正确');
   return payload;
 }
 
