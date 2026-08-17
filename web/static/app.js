@@ -16,6 +16,12 @@ const indicatorChange = (value, item) => `${value >= 0 ? '+' : ''}${Number(value
 function initIcons() { if (window.lucide) window.lucide.createIcons(); }
 function disposeCharts() { state.charts.forEach((chart) => chart.dispose()); state.charts = []; }
 function chartAt(element) { const chart = echarts.init(element, null, { renderer: 'canvas' }); state.charts.push(chart); return chart; }
+function watchChart(chart, element) {
+  const ro = new ResizeObserver(() => chart.resize());
+  ro.observe(element);
+  chart.__ro = ro;
+  return chart;
+}
 function chartGrid(bottom = 36) { return { left: 48, right: 24, top: 25, bottom, containLabel: false }; }
 function axisStyle() {
   return {
@@ -186,7 +192,9 @@ function renderIndustry() {
 
 function renderIndustryTrend(items) {
   state.industryTrendChart?.dispose();
-  const chart = echarts.init($('#industryTrendChart'), null, { renderer: 'canvas' });
+  const element = $('#industryTrendChart');
+  const chart = echarts.init(element, null, { renderer: 'canvas' });
+  watchChart(chart, element);
   state.industryTrendChart = chart;
   const dates = [...new Set(items.flatMap((item) => item.history.map((point) => point.date)))].sort();
   const compact = window.innerWidth <= 760;
@@ -212,8 +220,6 @@ function renderIndustryTrend(items) {
       return { name: item.name, type: 'line', data: dates.map((date) => values.has(date) ? values.get(date) : '-'), showSymbol: false, smooth: .12, lineStyle: { width: 1.8 }, emphasis: { focus: 'series', lineStyle: { width: 3 } } };
     }).concat([{ name: '0%基准', type: 'line', data: dates.map(() => 0), showSymbol: false, silent: true, tooltip: { show: false }, lineStyle: { color: '#92979b', width: 1, type: 'dashed' }, z: 0 }])
   });
-  setTimeout(() => chart.resize(), 60);
-  setTimeout(() => chart.resize(), 200);
 }
 
 function renderTurnover() {
