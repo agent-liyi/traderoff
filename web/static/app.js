@@ -531,6 +531,7 @@ async function switchView(view) {
   if (view === 'turnover') requestAnimationFrame(() => state.turnoverChart?.resize());
   if (view === 'breadth') requestAnimationFrame(() => state.breadthChart?.resize());
   if (view === 'factors') requestAnimationFrame(() => { state.factorIndexChart?.resize(); state.factorDistributionChart?.resize(); state.factorIndustryChart?.resize(); });
+  if (window.lucide) window.lucide.createIcons();
 }
 
 function render() {
