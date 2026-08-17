@@ -150,6 +150,7 @@ function renderStyleTrend() {
   if (items.length !== 6) return;
   state.styleTrendChart?.dispose();
   const chart = echarts.init($('#styleTrendChart'), null, { renderer: 'canvas' });
+  watchChart(chart, $('#styleTrendChart'));
   state.styleTrendChart = chart;
   const dates = [...new Set(items.flatMap((item) => item.history.map((point) => point.date)))].sort();
   const compact = window.innerWidth <= 760;
@@ -249,6 +250,7 @@ function turnoverSparkline(points) {
 function renderTurnoverTrend(items) {
   state.turnoverChart?.dispose();
   const chart = echarts.init($('#turnoverChart'), null, { renderer: 'canvas' });
+  watchChart(chart, $('#turnoverChart'));
   state.turnoverChart = chart;
   const dates = items[0].history.map((point) => point.date);
   const compact = window.innerWidth <= 760;
@@ -277,6 +279,7 @@ function renderBreadth() {
   $('#breadthChartDate').textContent = `${asOf} · 数据来源：Tushare Pro · 成分股快照 ${group.membershipSnapshot}`;
   state.breadthChart?.dispose();
   const chart = echarts.init($('#breadthChart'), null, { renderer: 'canvas' });
+  watchChart(chart, $('#breadthChart'));
   state.breadthChart = chart;
   const compact = window.innerWidth <= 760;
   chart.setOption({
@@ -306,6 +309,7 @@ function renderVolatilityChart(selector, dateSelector, items, title, annualized)
   const chartKey = selector === '#indexVolatilityChart' ? 'indexVolatilityChart' : 'crossVolatilityChart';
   state[chartKey]?.dispose();
   const chart = echarts.init($(selector), null, { renderer: 'canvas' });
+  watchChart(chart, $(selector));
   state[chartKey] = chart;
   const dates = items[0].history.map((point) => point.date);
   const compact = window.innerWidth <= 760;
@@ -360,6 +364,7 @@ function volumeLegend(items, compact) {
 function renderVolumeAmountTrend(items, history) {
   state.volumeAmountChart?.dispose();
   const chart = echarts.init($('#volumeAmountChart'), null, { renderer: 'canvas' });
+  watchChart(chart, $('#volumeAmountChart'));
   state.volumeAmountChart = chart;
   const { dates, compact, monthStart } = volumeChartMeta(history);
   $('#volumeAmountDate').textContent = `250个交易日 · ${dates[0]} — ${dates.at(-1)} · 数据来源：Tushare Pro`;
@@ -378,6 +383,7 @@ function renderVolumeAmountTrend(items, history) {
 function renderVolumeShareTrend(items, history) {
   state.volumeShareChart?.dispose();
   const chart = echarts.init($('#volumeShareChart'), null, { renderer: 'canvas' });
+  watchChart(chart, $('#volumeShareChart'));
   state.volumeShareChart = chart;
   const { dates, compact, monthStart } = volumeChartMeta(history);
   $('#volumeShareDate').textContent = `250个交易日 · ${dates[0]} — ${dates.at(-1)} · 数据来源：Tushare Pro`;
@@ -398,6 +404,7 @@ function renderEnvironmentTrend() {
   if (!items.length) return;
   state.environmentTrendChart?.dispose();
   const chart = echarts.init($('#environmentTrendChart'), null, { renderer: 'canvas' });
+  watchChart(chart, $('#environmentTrendChart'));
   state.environmentTrendChart = chart;
   const dates = [...new Set(items.flatMap((item) => item.history.map((point) => point.date)))].sort();
   const compact = window.innerWidth <= 760;
@@ -456,6 +463,7 @@ function factorChartBase() {
 function renderFactorIndexChart() {
   state.factorIndexChart?.dispose();
   const chart = echarts.init($('#factorIndexChart'), null, { renderer: 'canvas' });
+  watchChart(chart, $('#factorIndexChart'));
   state.factorIndexChart = chart;
   const data = state.factors;
   const compact = window.innerWidth <= 760;
@@ -476,6 +484,7 @@ function renderFactorIndexChart() {
 function renderFactorDistributionChart(key) {
   state.factorDistributionChart?.dispose();
   const chart = echarts.init($('#factorDistributionChart'), null, { renderer: 'canvas' });
+  watchChart(chart, $('#factorDistributionChart'));
   state.factorDistributionChart = chart;
   const distribution = state.factors.distributions.find((item) => item.key === key);
   chart.setOption({
@@ -491,6 +500,7 @@ function renderFactorIndustryChart() {
   element.style.width = `${Math.max(960, state.factors.factors.length * 70)}px`;
   element.style.height = `${Math.max(420, state.factors.industries.length * 27 + 100)}px`;
   const chart = echarts.init(element, null, { renderer: 'canvas' });
+  watchChart(chart, element);
   state.factorIndustryChart = chart;
   const valueMap = new Map(state.factors.heatmap.map((item) => [`${item.factor}|${item.industry}`, item.value]));
   chart.setOption({
@@ -531,14 +541,6 @@ async function switchView(view) {
   if (view === 'turnover' && !state.turnover) await loadTurnover();
   if (view === 'breadth' && !state.breadth) await loadBreadth();
   if (view === 'factors' && !state.factors) await loadFactors();
-  if (view === 'environment') setTimeout(() => state.environmentTrendChart?.resize(), 60);
-  if (view === 'style') setTimeout(() => state.styleTrendChart?.resize(), 60);
-  if (view === 'industry') setTimeout(() => { state.industryTrendChart?.resize(); }, 60);
-  if (view === 'volume') setTimeout(() => { state.volumeAmountChart?.resize(); state.volumeShareChart?.resize(); }, 60);
-  if (view === 'volatility') setTimeout(() => { state.indexVolatilityChart?.resize(); state.crossVolatilityChart?.resize(); }, 60);
-  if (view === 'turnover') setTimeout(() => state.turnoverChart?.resize(), 60);
-  if (view === 'breadth') setTimeout(() => state.breadthChart?.resize(), 60);
-  if (view === 'factors') setTimeout(() => { state.factorIndexChart?.resize(); state.factorDistributionChart?.resize(); state.factorIndustryChart?.resize(); }, 60);
   if (window.lucide) window.lucide.createIcons();
 }
 
@@ -651,9 +653,11 @@ function openDetail(key) {
   $('#detailView').classList.remove('hidden');
   document.body.style.overflow = 'hidden';
   requestAnimationFrame(() => {
-    const existing = echarts.getInstanceByDom($('#detailChart'));
+    const detailEl = $('#detailChart');
+    const existing = echarts.getInstanceByDom(detailEl);
     if (existing) existing.dispose();
-    const chart = echarts.init($('#detailChart'));
+    const chart = echarts.init(detailEl);
+    watchChart(chart, detailEl);
     chart.setOption({
       tooltip: {
         trigger: 'axis', backgroundColor: '#fff', borderColor: '#ccc', textStyle: { color: '#222', fontSize: 11 },
