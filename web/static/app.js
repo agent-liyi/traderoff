@@ -212,6 +212,8 @@ function renderIndustryTrend(items) {
       return { name: item.name, type: 'line', data: dates.map((date) => values.has(date) ? values.get(date) : '-'), showSymbol: false, smooth: .12, lineStyle: { width: 1.8 }, emphasis: { focus: 'series', lineStyle: { width: 3 } } };
     }).concat([{ name: '0%基准', type: 'line', data: dates.map(() => 0), showSymbol: false, silent: true, tooltip: { show: false }, lineStyle: { color: '#92979b', width: 1, type: 'dashed' }, z: 0 }])
   });
+  setTimeout(() => chart.resize(), 60);
+  setTimeout(() => chart.resize(), 200);
 }
 
 function renderTurnover() {
