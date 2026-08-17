@@ -1,21 +1,22 @@
-FROM node:24-bookworm-slim
+FROM python:3.11-slim-bookworm
 
 LABEL description="A-share market sentiment dashboard with direct Tushare refresh"
 
 RUN sed -i 's/deb.debian.org/mirrors.tuna.tsinghua.edu.cn/g' /etc/apt/sources.list.d/debian.sources
-RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-pip python3-venv build-essential gfortran libopenblas-dev liblapack-dev tzdata && rm -rf /var/lib/apt/lists/*
+# numpy/scipy/gfortran require build + BLAS/LAPACK; tzdata for Asia/Shanghai.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      build-essential gfortran libopenblas-dev liblapack-dev tzdata \
+      libpq-dev && \
+    rm -rf /var/lib/apt/lists/*
 RUN ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && echo Asia/Shanghai > /etc/timezone
 
 WORKDIR /app
 COPY requirements.txt ./
-RUN pip3 install --break-system-packages --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt
+RUN pip3 install --no-cache-dir -r requirements.txt
 
-WORKDIR /app/web
-COPY web/package.json web/package-lock.json ./
-RUN npm ci --omit=dev
-COPY web/server.js ./
-COPY web/tests ./tests
-COPY web/static ./static
+# Web app (FastAPI) + static frontend
+COPY web/ /app/web/
+# Market-data pipeline (notebooks) and schema
 COPY notebooks/ /app/notebooks/
 COPY db/ /app/db/
 COPY start-traderoff.sh /app/start-traderoff.sh
@@ -24,7 +25,6 @@ COPY schedule-market-refresh.sh /app/schedule-market-refresh.sh
 RUN chmod +x /app/start-traderoff.sh /app/refresh-market-data.sh /app/schedule-market-refresh.sh && mkdir -p /app/data /app/web/data /app/data/tushare_raw
 
 ENV TZ=Asia/Shanghai
-ENV NODE_ENV=production
 ENV PORT=8788
 ENV FEAR_GREED_DATA=/app/data/fear_greed_runtime.json
 ENV FEAR_GREED_DATA_DIR=/app/data

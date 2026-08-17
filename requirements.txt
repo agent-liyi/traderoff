@@ -3,3 +3,6 @@ pandas
 scipy
 tushare
 psycopg[binary]
+fastapi
+uvicorn
+httpx

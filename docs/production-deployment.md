@@ -23,7 +23,7 @@ Traderoff container :8788
 - Caddy 对外发布 `80`、`443` 和 UDP `443`，自动申请、保存并续期 TLS 证书。
 - Traderoff 仅在 Docker 网络中暴露 `8788`，不直接发布到主机端口。
 - `./data` 挂载到容器 `/app/data`，存放运行时 JSON、Tushare 缓存和用户数据库。
-- 多因子快照 `factor_exposure_runtime.json` 由显式命令生成，不在默认启动刷新链中；生成失败不会阻塞 Node 服务。
+- 多因子快照 `factor_exposure_runtime.json` 由显式命令生成，不在默认启动刷新链中；生成失败不会阻塞 FastAPI 数据服务。
 
 ## 前置条件
 
@@ -72,7 +72,7 @@ docker compose logs --tail=100 caddy
 - `traderoff` 容器反复重启；
 - Caddy 日志出现 `connect: connection refused`，公网返回 `502`；
 - 启动时的 Tushare 刷新因空或损坏缓存失败；
-- 启动脚本在 Node 服务之前执行全量刷新，使小规格主机长期高负载、难以 SSH。
+- 启动脚本在 FastAPI 数据服务之前执行全量刷新，使小规格主机长期高负载、难以 SSH。
 
 ### 数据保护与恢复
 
@@ -117,7 +117,7 @@ find data -type f -size 0 -print
 ```yaml
 services:
   traderoff:
-    command: ["node", "/app/web/server.js"]
+    command: ["/app/start-traderoff.sh"]
     environment:
       FEAR_GREED_DATA_DIR: /app/data
       FEAR_GREED_DATA: /app/data/fear_greed_runtime.json
@@ -126,8 +126,8 @@ services:
 
 该覆盖有两个目的：
 
-1. 让 Node 数据服务使用持久化的 `/app/data`，避免读取镜像默认的临时目录；后续恢复刷新器时也必须保留该数据目录变量。
-2. 覆盖默认启动脚本，直接启动 Node 服务，使已有验证数据先对外可用。
+1. 让 FastAPI 数据服务使用持久化的 `/app/data`，避免读取镜像默认的临时目录；后续恢复刷新器时也必须保留该数据目录变量。
+2. 覆盖默认启动脚本，直接启动 FastAPI 数据服务，使已有验证数据先对外可用。
 
 应用覆盖并启动：
 
@@ -145,7 +145,7 @@ docker exec traderoff sh -c 'printf "dir=%s\n" "$FEAR_GREED_DATA_DIR"; test -s "
 
 预期：`restart=0`、`running=true`、`oom=false`、`dir=/app/data`，并显示两条 `*-data=ok`。
 
-> 注意：此运行时覆盖会禁用 `start-traderoff.sh` 中的启动刷新和五分钟刷新循环。因此部署恢复后不会自动更新 Tushare 数据。正式恢复自动刷新前，需要在代码层将刷新流程改为“先启动网站，后在后台刷新”，并让空或损坏缓存自动重新拉取。该代码改动不属于本次恢复方案。
+> 注意：`start-traderoff.sh` 仅启动 FastAPI 数据服务，不执行数据刷新；每日刷新由独立的 `market-updater` 容器负责（见 `docker-compose.yml`）。此运行时覆盖只改变数据服务指向的 `data` 目录，不影响 `market-updater` 的定时刷新。若该覆盖仅用于恢复场景且你希望继续自动刷新，请同时确保 `market-updater` 服务正常运行。
 
 ## 公网验收
 
@@ -168,19 +168,35 @@ Location: https://traderoff.example.com/
 校验 API 结构：
 
 ```sh
-node - <<'NODE'
-const dashboard = require('/tmp/dashboard.json');
-const market = require('/tmp/market-environment.json');
-const factors = require('/tmp/factor-exposure.json');
-if (!dashboard.asOf || !Number.isFinite(dashboard.index?.score)) throw new Error('dashboard index is invalid');
-if (dashboard.series?.length !== 250) throw new Error('expected 250 dashboard rows for range=1y');
-if (dashboard.indicators?.length !== 5) throw new Error('expected five indicators');
-if (!market.asOf || market.indices?.length !== 12) throw new Error('expected twelve market indices');
-if (market.indices.some((item) => item.history?.length !== 250)) throw new Error('expected 250 history rows for each index');
-if (factors.factors?.length !== 16 || factors.quality?.universeCount < 1500 || factors.quality?.universeCount > 1900) throw new Error('expected sixteen factors and a valid CSI 1800 reference universe');
-if (!factors.model?.disclaimer?.includes('非 MSCI Barra 官方模型')) throw new Error('expected model disclaimer');
-console.log('deployment verification passed');
-NODE
+python3 - <<'PY'
+import json
+
+with open('/tmp/dashboard.json') as f:
+    dashboard = json.load(f)
+with open('/tmp/market-environment.json') as f:
+    market = json.load(f)
+with open('/tmp/factor-exposure.json') as f:
+    factors = json.load(f)
+
+def _finite(v):
+    return isinstance(v, (int, float))
+
+if not dashboard.get('asOf') or not _finite(dashboard.get('index', {}).get('score')):
+    raise SystemExit('dashboard index is invalid')
+if len(dashboard.get('series') or []) != 250:
+    raise SystemExit('expected 250 dashboard rows for range=1y')
+if len(dashboard.get('indicators') or []) != 5:
+    raise SystemExit('expected five indicators')
+if not market.get('asOf') or len(market.get('indices') or []) != 12:
+    raise SystemExit('expected twelve market indices')
+if any(len(item.get('history') or []) != 250 for item in market['indices']):
+    raise SystemExit('expected 250 history rows for each index')
+if len(factors.get('factors') or []) != 16 or not (1500 <= factors['quality']['universeCount'] <= 1900):
+    raise SystemExit('expected sixteen factors and a valid CSI 1800 reference universe')
+if '非 MSCI Barra 官方模型' not in (factors.get('model') or {}).get('disclaimer', ''):
+    raise SystemExit('expected model disclaimer')
+print('deployment verification passed')
+PY
 ```
 
 还应确认首页静态资源可访问：

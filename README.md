@@ -62,15 +62,15 @@ WECHAT_REDIRECT_URI=https://your-domain.example/api/auth/wechat/callback
 
 ## Development
 
-The dashboard server lives in `web/`. The tests read the generated `data/*.json` snapshots (file backend), which are not tracked in the repository. With `TUSHARE_TOKEN` set in `.env`, produce them once first — e.g. `docker compose run --rm market-updater /app/refresh-market-data.sh` — then run:
+The dashboard server lives in `web/` (FastAPI backend + static pages). The tests read the generated `data/*.json` snapshots (file backend), which are not tracked in the repository. With `TUSHARE_TOKEN` set in `.env`, produce them once first — e.g. `docker compose run --rm market-updater /app/refresh-market-data.sh` — then set up dependencies and run:
 
 ```sh
-cd web
-npm ci
-npm test
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m pytest web/tests/
 ```
 
-The Docker image includes Python, NumPy, Pandas, SciPy, and Tushare for the scheduled refresh tasks. You can also generate the factor snapshot manually from the repository root with:
+The Docker image includes Python, NumPy, Pandas, SciPy, and Tushare for the scheduled refresh tasks, plus FastAPI, Uvicorn, and httpx for the web service. You can also generate the factor snapshot manually from the repository root with:
 
 ```sh
 set -a; . ./.env; set +a
@@ -82,7 +82,7 @@ The generator reuses `data/tushare_raw/equity_daily`. If financial API access is
 After the runtime data has been produced (see above), run the server tests inside the container with:
 
 ```sh
-docker compose exec traderoff sh -lc 'cd /app/web && npm test'
+docker compose exec traderoff sh -lc 'cd /app/web && python3 -m pytest tests'
 ```
 
 ## Data Source

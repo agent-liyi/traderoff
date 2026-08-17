@@ -64,15 +64,15 @@ WECHAT_REDIRECT_URI=https://your-domain.example/api/auth/wechat/callback
 
 ## 开发与测试
 
-前端服务位于 `web/`。测试读取已生成的 `data/*.json` 快照（file 后端），这些文件不在仓库中。在 `.env` 中配置 `TUSHARE_TOKEN` 后，先执行一次刷新生成它们（例如 `docker compose run --rm market-updater /app/refresh-market-data.sh`），再安装依赖并运行测试：
+前端服务位于 `web/`（FastAPI 后端 + 静态页面）。测试读取已生成的 `data/*.json` 快照（file 后端），这些文件不在仓库中。在 `.env` 中配置 `TUSHARE_TOKEN` 后，先执行一次刷新生成它们（例如 `docker compose run --rm market-updater /app/refresh-market-data.sh`），再安装依赖并运行测试：
 
 ```sh
-cd web
-npm ci
-npm test
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python -m pytest web/tests/
 ```
 
-Docker 镜像内包含定时刷新所需的 Python、NumPy、Pandas、SciPy 与 Tushare。多因子快照可在项目根目录显式生成，脚本优先复用 `data/tushare_raw/equity_daily` 长期缓存，并将结果写入 `data/factor_exposure_runtime.json`：
+Docker 镜像内包含定时刷新所需的 Python、NumPy、Pandas、SciPy 与 Tushare，以及 Web 服务所需的 FastAPI、Uvicorn 与 httpx。多因子快照可在项目根目录显式生成，脚本优先复用 `data/tushare_raw/equity_daily` 长期缓存，并将结果写入 `data/factor_exposure_runtime.json`：
 
 ```sh
 set -a; . ./.env; set +a
@@ -84,7 +84,7 @@ FEAR_GREED_DATA_DIR="$PWD/data" python3 notebooks/update_factor_exposure_tushare
 生成运行时数据后（见上文），也可以在容器内执行测试：
 
 ```sh
-docker compose exec traderoff sh -lc 'cd /app/web && npm test'
+docker compose exec traderoff sh -lc 'cd /app/web && python3 -m pytest tests'
 ```
 
 ## 数据来源与安全
