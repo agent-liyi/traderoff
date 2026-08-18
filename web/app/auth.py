@@ -15,12 +15,18 @@ import hashlib
 import hmac
 import secrets
 import sqlite3
+import threading
 import time
 
 from . import config
 
 WECHAT_STATE_TTL_S = config.WECHAT_STATE_TTL_S
 SESSION_TTL_S = 7 * 86400  # 7 days
+
+# Serializes access to the shared sqlite connection across FastAPI worker-thread
+# requests (see _get_db). SQLite with check_same_thread=False is not safe under
+# concurrent reads/writes without a guard, so every public DB op holds this lock.
+_DB_LOCK = threading.Lock()
 
 
 def _sha256_hash(value: str) -> str:
@@ -38,7 +44,12 @@ def _get_db() -> sqlite3.Connection:
     global _db
     if _db is None:
         Path(config.USERS_DB).parent.mkdir(parents=True, exist_ok=True)
-        _db = sqlite3.connect(config.USERS_DB)
+        # FastAPI sync endpoints run on a worker thread pool, so a request may
+        # touch the singleton connection from a different thread than the one
+        # that created it. check_same_thread=False (SQLite serialized mode) plus
+        # a busy timeout lets that happen safely.
+        _db = sqlite3.connect(config.USERS_DB, check_same_thread=False)
+        _db.execute("PRAGMA busy_timeout=5000")
         _db.row_factory = sqlite3.Row
         _init_schema(_db)
     return _db
@@ -102,13 +113,14 @@ def current_user(cookie_header: str | None) -> User | None:
     if not token:
         return None
     token_hash = _sha256_hash(token)
-    db = _get_db()
-    row = db.execute(
-        "SELECT users.id, users.name, users.avatar_url FROM sessions "
-        "JOIN users ON users.id = sessions.user_id "
-        "WHERE sessions.token_hash = ? AND sessions.expires_at > ?",
-        (token_hash, int(time.time() * 1000)),
-    ).fetchone()
+    with _DB_LOCK:
+        db = _get_db()
+        row = db.execute(
+            "SELECT users.id, users.name, users.avatar_url FROM sessions "
+            "JOIN users ON users.id = sessions.user_id "
+            "WHERE sessions.token_hash = ? AND sessions.expires_at > ?",
+            (token_hash, int(time.time() * 1000)),
+        ).fetchone()
     if row is None:
         return None
     return User(id=row["id"], name=row["name"], avatar_url=row["avatar_url"])
@@ -141,12 +153,13 @@ def session_cookie(token: str) -> str:
 
 def create_session(user_id: int) -> str:
     token = secrets.token_urlsafe(32)
-    db = _get_db()
-    db.execute(
-        "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)",
-        (_sha256_hash(token), user_id, int(time.time() * 1000) + SESSION_TTL_S * 1000),
-    )
-    db.commit()
+    with _DB_LOCK:
+        db = _get_db()
+        db.execute(
+            "INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)",
+            (_sha256_hash(token), user_id, int(time.time() * 1000) + SESSION_TTL_S * 1000),
+        )
+        db.commit()
     return token
 
 
@@ -154,9 +167,10 @@ def destroy_session(cookie_header: str | None) -> None:
     token = _cookie(cookie_header or "").get("session")
     if not token:
         return
-    db = _get_db()
-    db.execute("DELETE FROM sessions WHERE token_hash = ?", (_sha256_hash(token),))
-    db.commit()
+    with _DB_LOCK:
+        db = _get_db()
+        db.execute("DELETE FROM sessions WHERE token_hash = ?", (_sha256_hash(token),))
+        db.commit()
 
 
 def clear_session_cookie() -> str:
@@ -170,26 +184,28 @@ def clear_session_cookie() -> str:
 
 def create_wechat_state() -> str:
     state = secrets.token_urlsafe(24)
-    db = _get_db()
-    now = int(time.time() * 1000)
-    db.execute("DELETE FROM oauth_states WHERE expires_at <= ?", (now,))
-    db.execute(
-        "INSERT INTO oauth_states (state_hash, expires_at) VALUES (?, ?)",
-        (_sha256_hash(state), now + WECHAT_STATE_TTL_S * 1000),
-    )
-    db.commit()
+    with _DB_LOCK:
+        db = _get_db()
+        now = int(time.time() * 1000)
+        db.execute("DELETE FROM oauth_states WHERE expires_at <= ?", (now,))
+        db.execute(
+            "INSERT INTO oauth_states (state_hash, expires_at) VALUES (?, ?)",
+            (_sha256_hash(state), now + WECHAT_STATE_TTL_S * 1000),
+        )
+        db.commit()
     return state
 
 
 def consume_wechat_state(state: str | None) -> bool:
     if not state:
         return False
-    db = _get_db()
-    now = int(time.time() * 1000)
-    state_hash = _sha256_hash(state)
-    row = db.execute("SELECT expires_at FROM oauth_states WHERE state_hash = ?", (state_hash,)).fetchone()
-    db.execute("DELETE FROM oauth_states WHERE state_hash = ?", (state_hash,))
-    db.commit()
+    with _DB_LOCK:
+        db = _get_db()
+        now = int(time.time() * 1000)
+        state_hash = _sha256_hash(state)
+        row = db.execute("SELECT expires_at FROM oauth_states WHERE state_hash = ?", (state_hash,)).fetchone()
+        db.execute("DELETE FROM oauth_states WHERE state_hash = ?", (state_hash,))
+        db.commit()
     return bool(row and row["expires_at"] > now)
 
 
@@ -239,28 +255,29 @@ def exchange_wechat_code(code: str) -> dict:
 
 def find_or_create_wechat_user(profile: dict) -> User:
     """Finds by wechat_openid or creates a new user (mirrors findOrCreateWechatUser)."""
-    db = _get_db()
-    row = db.execute(
-        "SELECT id, name, avatar_url FROM users WHERE wechat_openid = ?",
-        (profile["openid"],),
-    ).fetchone()
-    if row:
-        new_name = profile.get("nickname") or row["name"]
-        new_avatar = profile.get("headimgurl")  # None -> nullable column
-        db.execute(
-            "UPDATE users SET name = ?, avatar_url = ? WHERE id = ?",
-            (new_name, new_avatar, row["id"]),
+    with _DB_LOCK:
+        db = _get_db()
+        row = db.execute(
+            "SELECT id, name, avatar_url FROM users WHERE wechat_openid = ?",
+            (profile["openid"],),
+        ).fetchone()
+        if row:
+            new_name = profile.get("nickname") or row["name"]
+            new_avatar = profile.get("headimgurl")  # None -> nullable column
+            db.execute(
+                "UPDATE users SET name = ?, avatar_url = ? WHERE id = ?",
+                (new_name, new_avatar, row["id"]),
+            )
+            db.commit()
+            return User(id=row["id"], name=new_name, avatar_url=new_avatar)
+        identity = _sha256_hash(profile["openid"])[:24]
+        name = str(profile.get("nickname") or "微信用户")[:40]
+        email = f"{identity}@wechat.local"
+        avatar = profile.get("headimgurl")
+        cursor = db.execute(
+            "INSERT INTO users (name, email, password_hash, wechat_openid, avatar_url) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (name, email, "wechat-oauth", profile["openid"], avatar),
         )
         db.commit()
-        return User(id=row["id"], name=new_name, avatar_url=new_avatar)
-    identity = _sha256_hash(profile["openid"])[:24]
-    name = str(profile.get("nickname") or "微信用户")[:40]
-    email = f"{identity}@wechat.local"
-    avatar = profile.get("headimgurl")
-    cursor = db.execute(
-        "INSERT INTO users (name, email, password_hash, wechat_openid, avatar_url) "
-        "VALUES (?, ?, ?, ?, ?)",
-        (name, email, "wechat-oauth", profile["openid"], avatar),
-    )
-    db.commit()
-    return User(id=cursor.lastrowid, name=name, avatar_url=avatar)
+        return User(id=cursor.lastrowid, name=name, avatar_url=avatar)
