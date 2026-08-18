@@ -178,8 +178,12 @@ def _isnan(value) -> bool:
         return False
 
 
-def _update_snapshot(conn, history: list[dict], new_rows: list[dict]) -> None:
-    """Rebuild full fear-greed payload (history + new rows) and upsert snapshot."""
+def _js(value):
+    return value
+
+
+def _update_snapshot(conn, history: list[dict], new_rows: list[dict]) -> list[dict]:
+    """Rebuild full fear-greed payload (history + new rows), upsert snapshot, return payload."""
     # Map existing history to the payload record shape, then append new rows.
     payload = list(history)
     for r in new_rows:
@@ -212,10 +216,20 @@ def _update_snapshot(conn, history: list[dict], new_rows: list[dict]) -> None:
             (as_of, generated_at, payload_bytes, digest),
         )
     conn.commit()
+    return payload
 
 
-def _js(value):
-    return value
+def _write_json(payload: list[dict]) -> None:
+    """Persist the full fear-greed payload to the runtime JSON file.
+
+    Keeps data/fear_greed_runtime.json consistent with the database so a later
+    `sync_market_data.py` reads the appended rows instead of stale ones.
+    """
+    fg.OUTPUT_PATH.parent.mkdir(parents=True, exist_ok=True)
+    fg.OUTPUT_PATH.write_text(
+        json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+    )
+    print(f"已刷新 {fg.OUTPUT_PATH} ({len(payload)} 行)")
 
 
 def main() -> None:
@@ -233,6 +247,11 @@ def main() -> None:
         print(f"待追加交易日: {pending or '无'}")
 
         if not pending:
+            # Ensure the runtime JSON matches the DB (stale json could otherwise
+            # overwrite the snapshot at the next full sync).
+            history = _existing_history(conn)
+            if history:
+                _write_json(history)
             print("已是最新，无需增量")
             return
 
@@ -255,9 +274,10 @@ def main() -> None:
         rows = row_df.to_dict("records")
         _upsert_rows(conn, rows)
 
-        # Refresh snapshot: existing full history + appended rows.
+        # Refresh snapshot + json: existing full history + appended rows.
         history = _existing_history(conn)
-        _update_snapshot(conn, history, rows)
+        payload = _update_snapshot(conn, history, rows)
+        _write_json(payload)
 
         print(f"增量同步完成：已追加 {len(rows)} 个交易日到 market_fear_greed_daily")
     finally:

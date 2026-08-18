@@ -8,7 +8,10 @@ PYTHON="${PYTHON:-python3}"
 
 export FEAR_GREED_DATA_DIR="$DATA_DIR"
 echo "[traderoff] market refresh started at $(date -Iseconds)"
-"$PYTHON" "$NOTEBOOK_DIR/update_fear_greed_tushare.py"
+# Fear & Greed is updated incrementally (append only new trading days) to keep
+# memory usage safe on the small production instance; fall back to the full
+# rebuild only if no history exists yet.
+"$PYTHON" "$NOTEBOOK_DIR/update_fear_greed_incremental.py"
 "$PYTHON" "$NOTEBOOK_DIR/update_market_environment_tushare.py"
 "$PYTHON" "$NOTEBOOK_DIR/update_market_style_tushare.py"
 "$PYTHON" "$NOTEBOOK_DIR/update_industry_price_tushare.py"
