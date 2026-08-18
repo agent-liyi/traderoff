@@ -9,10 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode, urlparse, parse_qs
+from urllib.parse import urlencode
 
 import hashlib
-import hmac
 import secrets
 import sqlite3
 import threading

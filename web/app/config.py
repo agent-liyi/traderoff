@@ -43,7 +43,6 @@ MARKET_DATA_BACKEND = os.getenv("MARKET_DATA_BACKEND")
 if not MARKET_DATA_BACKEND:
     MARKET_DATA_BACKEND = "file" if os.getenv("PYTEST_CURRENT_TEST") or os.getenv("TRADEROFF_TEST") else "postgres"
 MARKET_DATABASE_URL = os.getenv("MARKET_DATABASE_URL") or os.getenv("DATABASE_URL") or ""
-MARKET_DB_POOL_SIZE = int(os.getenv("MARKET_DB_POOL_SIZE", "4"))
 
 # Map dataset name -> runtime JSON file path (file backend)
 DATASET_FILES = {

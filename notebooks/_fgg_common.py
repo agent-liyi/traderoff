@@ -17,7 +17,6 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 import tushare as ts
-from scipy.stats import norm
 
 DATA_DIR = Path(os.getenv("FEAR_GREED_DATA_DIR", "/workspace/data"))
 RAW_DIR = DATA_DIR / "tushare_raw"
@@ -122,35 +121,6 @@ def fetch_option_daily(pro, dates):
     if not frames:
         raise RuntimeError("No option daily data available")
     return pd.concat(frames, ignore_index=True)
-
-
-def bs_price(spot, strike, years, rate, sigma, call_put):
-    if years <= 0 or sigma <= 0:
-        return max(spot - strike, 0) if call_put == "C" else max(strike - spot, 0)
-    root_t = math.sqrt(years)
-    d1 = (math.log(spot / strike) + (rate + 0.5 * sigma * sigma) * years) / (sigma * root_t)
-    d2 = d1 - sigma * root_t
-    if call_put == "C":
-        return spot * norm.cdf(d1) - strike * math.exp(-rate * years) * norm.cdf(d2)
-    return strike * math.exp(-rate * years) * norm.cdf(-d2) - spot * norm.cdf(-d1)
-
-
-def implied_vol(spot, strike, years, rate, market_price, call_put):
-    if not all(np.isfinite([spot, strike, years, rate, market_price])) or market_price <= 0:
-        return np.nan
-    low, high = 0.005, 3.0
-    low_price = bs_price(spot, strike, years, rate, low, call_put)
-    high_price = bs_price(spot, strike, years, rate, high, call_put)
-    if market_price < low_price or market_price > high_price:
-        return np.nan
-    for _ in range(70):
-        mid = (low + high) / 2
-        value = bs_price(spot, strike, years, rate, mid, call_put)
-        if value > market_price:
-            high = mid
-        else:
-            low = mid
-    return (low + high) / 2
 
 
 def option_variance(expiry_chain, rate):
