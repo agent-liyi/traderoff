@@ -13,7 +13,7 @@ import os
 import subprocess
 from zoneinfo import ZoneInfo
 
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 logger = logging.getLogger(__name__)
@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 _REFRESH_SCRIPT = os.getenv("REFRESH_MARKET_DATA_SH", "/app/refresh-market-data.sh")
 _TZ = ZoneInfo("Asia/Shanghai")
 
-_scheduler: AsyncIOScheduler | None = None
+_scheduler: BackgroundScheduler | None = None
 
 
 def run_refresh() -> None:
@@ -40,10 +40,10 @@ def run_refresh() -> None:
         logger.exception("[refresher] refresh failed")
 
 
-def start_scheduler() -> AsyncIOScheduler:
-    """Build and start an APScheduler that refreshes weekdays at 21:10."""
+def start_scheduler() -> BackgroundScheduler:
+    """Build and start a scheduler that refreshes weekdays at 21:10 (Asia/Shanghai)."""
     global _scheduler
-    scheduler = AsyncIOScheduler(timezone=_TZ)
+    scheduler = BackgroundScheduler(timezone=_TZ)
     # Weekdays 21:10 Asia/Shanghai (matches the former schedule-market-refresh.sh).
     scheduler.add_job(
         run_refresh,
