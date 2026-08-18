@@ -54,8 +54,17 @@ jobs:
           script: |
             set -e
             cd /home/${{ secrets.SSH_USER }}/apps/traderoff
-            echo "--- Sync code (force to pushed ref) ---"
-            git fetch origin main
+            echo "--- Sync code (git fetch with retries) ---"
+            fetch_ok=0
+            for i in 1 2 3 4 5; do
+              if timeout 60 git fetch origin main; then fetch_ok=1; break; fi
+              echo "git fetch attempt $i failed; retrying"
+              sleep 5
+            done
+            if [ "$fetch_ok" != "1" ]; then
+              echo "ERROR: could not fetch origin/main (server->GitHub unstable)"
+              exit 1
+            fi
             git reset --hard origin/main
             echo "--- Rebuild images ---"
             docker compose build traderoff market-updater
