@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
-"""Build the A-share Fear & Greed Index from Tushare-only raw data.
+"""Shared Tushare fetch/calc helpers for the Fear & Greed data pipeline.
 
-The script caches high-volume daily responses under /workspace/data/tushare_raw
-and writes the website-ready series to /workspace/data/fear_greed_runtime.json.
+Pulled out of the (removed) full-rebuild script so the incremental updater can
+reuse the calculation logic without keeping the whole-history rebuild script.
 """
 
 from __future__ import annotations
 
-import argparse
 import math
 import os
 import time
@@ -345,74 +344,3 @@ def rolling_percentile(series, invert=False):
     return 100 - score if invert else score
 
 
-def build_index(pro, start, end):
-    dates = trading_dates(pro, start, end)
-    if len(dates) < LOOKBACK:
-        raise RuntimeError(f"Need at least {LOOKBACK} trading days, got {len(dates)}")
-    print(f"Tushare-only update: {dates[0]} - {dates[-1]} ({len(dates)} days)")
-
-    print("[1/5] 全市场250日新高占比", flush=True)
-    equity = fetch_equity_daily(pro, dates)
-    strength, volume = calc_price_strength_and_volume(equity)
-
-    print("[2/5] 50ETF QVIX", flush=True)
-    options = fetch_option_daily(pro, dates)
-    qvix = calc_qvix(pro, dates, options)
-
-    print("[3/5] IF次月年化升贴水", flush=True)
-    futures, hs300 = calc_futures(pro, dates)
-
-    print("[4/5] 股债避险需求", flush=True)
-    safety = calc_safe_haven(pro, dates, hs300)
-
-    print("[5/5] 滚动百分位与综合指数", flush=True)
-    shanghai = fetch_shanghai_index(pro, dates)
-    result = pd.DataFrame({"trade_date": dates})
-    for frame in [qvix.rename(columns={"date": "trade_date"}), strength, futures, volume, safety, shanghai]:
-        result = result.merge(frame, on="trade_date", how="left")
-    result = result.sort_values("trade_date")
-    raw_columns = ["raw_qvix", "raw_strength", "raw_futures", "raw_volume", "raw_safety"]
-    result["raw_qvix"] = result["raw_qvix"].interpolate(method="linear", limit_area="inside")
-    result["raw_futures"] = result["raw_futures"].interpolate(method="linear", limit_area="inside")
-    result["QVIX"] = rolling_percentile(result["raw_qvix"], invert=True)
-    result["股价强度"] = rolling_percentile(result["raw_strength"])
-    result["期货升贴水"] = rolling_percentile(result["raw_futures"])
-    result["成交量"] = rolling_percentile(result["raw_volume"])
-    result["避险需求"] = rolling_percentile(result["raw_safety"])
-    score_columns = ["QVIX", "股价强度", "期货升贴水", "成交量", "避险需求"]
-    result["our_index"] = result[score_columns].mean(axis=1, skipna=False)
-    result = result.dropna(subset=["our_index"]).copy()
-    result["date"] = pd.to_datetime(result["trade_date"]).dt.strftime("%Y-%m-%d")
-    result["our_zone"] = pd.cut(
-        result["our_index"], bins=[0, 25, 40, 60, 75, 100],
-        labels=["极度恐惧", "恐惧", "中性", "贪婪", "极度贪婪"], include_lowest=True,
-    )
-    output_columns = ["date", *score_columns, "our_index", "our_zone", "shanghai_index", *raw_columns]
-    result[output_columns].to_json(OUTPUT_PATH, orient="records", force_ascii=False)
-    latest = result.iloc[-1]
-    print(f"完成: {OUTPUT_PATH}")
-    print(f"最新 {latest['date']}: {latest['our_index']:.1f} ({latest['our_zone']})")
-    return result[output_columns]
-
-
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--start", default="20200101", help="History start date, YYYYMMDD")
-    parser.add_argument("--end", help="End date, defaults to latest open date")
-    args = parser.parse_args()
-    pro = ts.pro_api()
-    end = latest_open_date(pro, args.end)
-    if not args.end and OUTPUT_PATH.exists():
-        try:
-            existing = pd.read_json(OUTPUT_PATH)
-            first_date = str(existing.iloc[0]["date"]).replace("-", "")
-            if not existing.empty and first_date <= args.start and str(existing.iloc[-1]["date"]).replace("-", "") == end:
-                print(f"跳过: {end} 已是最新可用交易日")
-                return
-        except (OSError, ValueError, KeyError, IndexError):
-            pass
-    build_index(pro, args.start, end)
-
-
-if __name__ == "__main__":
-    main()

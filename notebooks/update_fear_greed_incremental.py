@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
 """Incrementally append new Fear & Greed trading days directly into PostgreSQL.
 
-Alternative to the full-rebuild update_fear_greed_tushare.py. Instead of
-recomputing the whole history (which concats ~1600 cached trading days and
-can OOM a 1.9GiB box), this script:
+Alternative to the (removed) full-rebuild script. Instead of recomputing the
+whole history (which concats ~1600 cached trading days and can OOM a 1.9GiB
+box), this script:
 
 1. Reads the latest trade_date already in `market_fear_greed_daily`.
 2. Computes the pending open trading dates after that up to the latest
    available trading date.
-3. Reuses update_fear_greed_tushare's fetch/calc over a *recent window*
-   (~LOOKBACK + pending) so rolling metrics (250-day) are correct but the
-   in-memory footprint stays small.
+3. Reuses _fgg_common's fetch/calc over a *recent window* (~LOOKBACK + pending)
+   so rolling metrics (250-day) are correct but the in-memory footprint stays
+   small.
 4. Inserts/updates only the pending rows into `market_fear_greed_daily`.
 5. Refreshes the `fear-greed` snapshot in `market_runtime_snapshots` by
    merging the appended rows into the existing payload.
-
-Reuse is safe: importing update_fear_greed_tushare runs only module-level
-constants and imports (no side-effecting top-level execution).
 """
 
 from __future__ import annotations
@@ -35,9 +32,9 @@ import pandas as pd
 
 import psycopg
 
-# Reuse the fetch/calc helpers from the full-rebuild script.
+# Reuse the fetch/calc helpers extracted into the shared common module.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-import update_fear_greed_tushare as fg
+import _fgg_common as fg
 
 LOOKBACK = fg.LOOKBACK
 WINDOW_EXTRA = 12  # extra trading days so pending rows' rolling(250) is full
