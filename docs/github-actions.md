@@ -14,14 +14,38 @@
 |---|---|---|---|
 | `SSH_HOST` | ✅ | 腾讯云服务器公网 IP | `192.144.130.81` |
 | `SSH_USER` | ✅ | 服务器 SSH 用户名 | `traderoff` |
-| `SSH_PASSWORD` | ✅ | 用户 `SSH_USER` 的 SSH 密码 | ⚠️ 请勿在示例中写真实值 |
+| `SSH_PRIVATE_KEY` | ✅ | **私钥**(非公钥)的完整内容，用于 Key 认证 | `-----BEGIN OPENSSH PRIVATE KEY-----…` |
 | `SSH_PORT` | 可选 | SSH 端口，默认 `22` | `22` |
 
-> ⚠️ 安全提示：`SSH_PASSWORD` 会明文存于 GitHub 机密（GitHub 会加密保存，但
-> Actions runner 上脚本可见）。长期运行建议改用 **SSH 私钥**（`SSH_PRIVATE_KEY`），
-> 并在服务器仅保留该公钥的认证方式，避免长期使用明文密码。
+> 需要同时把对应用户的**公钥**放到服务器 `~/.ssh/authorized_keys`，
+> 见下文「第二步：配置服务器公钥」。
+> 不再需要 `SSH_PASSWORD`(避免明文密码)。
 
-## 第二步：/ First push 触发
+## 第二步：配置服务器公钥
+
+为了让 GitHub Actions 能以 `SSH_USER` 免密登录服务器，把私钥对应的公钥追加到
+服务器的 `~/.ssh/authorized_keys`：
+
+```sh
+# 本机(有私钥的机器)导出公钥，或直接从已生成的私钥计算
+ssh-keygen -y -f /path/to/private_key
+# 或直接拷贝已有公钥文件内容
+
+# 在服务器以 SSH_USER 登录后追加
+mkdir -p ~/.ssh && chmod 700 ~/.ssh
+echo "ssh-ed25519 AAAA... your-comment" >> ~/.ssh/authorized_keys
+chmod 600 ~/.ssh/authorized_keys
+```
+
+验证服务器可用该公钥免密登录：
+
+```sh
+ssh -i /path/to/private_key traderoff@192.144.130.81 'echo OK'
+```
+
+之后把 `private_key` 的**整份内容**填到 GitHub `SSH_PRIVATE_KEY`。
+
+## 第三步 / First push 触发
 
 - 工作流对 push 到 `main` 生效；你也可以在 Actions 页手动 `Run workflow`。
 - 部署 step 会执行：
