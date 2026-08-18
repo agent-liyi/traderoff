@@ -47,6 +47,8 @@ services:
       WECHAT_REDIRECT_URI: ${WECHAT_REDIRECT_URI:-https://${TRADEROFF_DOMAIN:-localhost}/api/auth/wechat/callback}
       MARKET_DATA_BACKEND: postgres
       MARKET_DATABASE_URL: postgresql://traderoff:${POSTGRES_PASSWORD}@postgres:5432/traderoff
+      TUSHARE_TOKEN: ${TUSHARE_TOKEN}
+      FEAR_GREED_DATA_DIR: /app/data
       MARKET_ENVIRONMENT_DATA: /app/data/market_environment_runtime.json
       MARKET_STYLE_DATA: /app/data/market_style_runtime.json
       INDUSTRY_PRICE_DATA: /app/data/industry_price_runtime.json
@@ -55,23 +57,6 @@ services:
       MARKET_TURNOVER_DATA: /app/data/market_turnover_runtime.json
       MARKET_BREADTH_DATA: /app/data/market_breadth_runtime.json
       FACTOR_EXPOSURE_DATA: /app/data/factor_exposure_runtime.json
-    restart: unless-stopped
-
-  market-updater:
-    image: traderoff-traderoff:latest
-    build: .
-    container_name: traderoff-market-updater
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: ["/app/schedule-market-refresh.sh"]
-    volumes:
-      - ./data:/app/data
-      - ./db:/app/db:ro
-    environment:
-      TUSHARE_TOKEN: ${TUSHARE_TOKEN}
-      FEAR_GREED_DATA_DIR: /app/data
-      MARKET_DATABASE_URL: postgresql://traderoff:${POSTGRES_PASSWORD}@postgres:5432/traderoff
     restart: unless-stopped
 
   caddy:

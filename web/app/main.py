@@ -22,16 +22,29 @@ Errors: 503 -> {"error": message}; otherwise 500 -> {"error": "服务暂时不�
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.exceptions import HTTPException
 
-from . import auth, config, market_data, dashboard as dashboard_module
+from . import auth, config, market_data, dashboard as dashboard_module, refresher
 
 # Querystring value for range is validated when passed through; default 1y.
 DASHBOARD_RANGES = {"6m", "1y", "3y", "all"}
 
-app = FastAPI(title="Traderoff A-share Fear Greed Dashboard", docs_url=None, redoc_url=None, openapi_url=None)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Start the in-process market-data refresh scheduler (weekdays 21:10 SH).
+    refresher.start_scheduler()
+    try:
+        yield
+    finally:
+        refresher.shutdown_scheduler()
+
+
+app = FastAPI(title="Traderoff A-share Fear Greed Dashboard", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 
 
 # ---------------------------------------------------------------------------

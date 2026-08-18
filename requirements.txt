@@ -6,3 +6,4 @@ psycopg[binary]
 fastapi
 uvicorn
 httpx
+APScheduler==3.11.0
