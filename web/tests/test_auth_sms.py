@@ -81,6 +81,17 @@ def test_sms_send_rate_limited_60s(sms_db, monkeypatch):
         auth.send_sms_code("13800138000")  # within 60s window
 
 
+def test_sms_send_daily_cap(sms_db, monkeypatch):
+    monkeypatch.setattr(auth, "_sms_provider_send", lambda phone, code: code)
+    # exhaust the daily quota by simulating sends (each new day resets count)
+    for _ in range(auth.SMS_CODE_MAX_DAILY):
+        t = time.time() + (1000 + _ * 1000)  # move past the send-window each time
+        monkeypatch.setattr(time, "time", lambda now=t: now)
+        auth.send_sms_code("13900139000")
+    with pytest.raises(auth.RateLimitError):
+        auth.send_sms_code("13900139000")
+
+
 # ---------------------------------------------------------------------------
 # register / login (password)
 # ---------------------------------------------------------------------------

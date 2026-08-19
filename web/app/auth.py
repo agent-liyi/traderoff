@@ -93,7 +93,9 @@ def _init_schema(db: sqlite3.Connection) -> None:
           phone TEXT PRIMARY KEY,
           code_hash TEXT NOT NULL,
           expires_at INTEGER NOT NULL,
-          attempts INTEGER NOT NULL DEFAULT 0
+          attempts INTEGER NOT NULL DEFAULT 0,
+          last_send_day TEXT NOT NULL DEFAULT '',
+          day_sent INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS login_attempts (
           phone TEXT PRIMARY KEY,
@@ -231,20 +233,28 @@ def _sms_provider_send(phone: str, code: str) -> str:
 
 
 def send_sms_code(phone: str) -> str:
-    """Generate a 6-digit code and send it, enforcing the per-phone send limit."""
+    """Generate a 6-digit code and send it, enforcing per-phone rate limits."""
     code = f"{secrets.randbelow(1000000):06d}"
     now = int(time.time() * 1000)
+    today = time.strftime("%Y-%m-%d", time.localtime(now / 1000))
     with _DB_LOCK:
         db = _get_db()
-        row = db.execute("SELECT code_hash, expires_at FROM sms_codes WHERE phone = ?", (phone,)).fetchone()
+        row = db.execute(
+            "SELECT code_hash, expires_at, last_send_day, day_sent FROM sms_codes WHERE phone = ?", (phone,),
+        ).fetchone()
+        # per-day cap (anti SMS bombing)
+        if row is not None and row["last_send_day"] == today and row["day_sent"] >= SMS_CODE_MAX_DAILY:
+            raise RateLimitError("今日验证码发送次数已达上限")
+        # send-window rate limit (one code per TTL window)
         if row is not None and row["expires_at"] > now:
-            # still within the send window -> rate-limit
             raise RateLimitError("验证码发送过于频繁，请稍后再试")
-        # daily cap (simple: reuse the single row; production should track per-day)
+        day_sent = (row["day_sent"] + 1) if (row is not None and row["last_send_day"] == today) else 1
         db.execute(
-            "INSERT INTO sms_codes (phone, code_hash, expires_at, attempts) VALUES (?, ?, ?, 0) "
-            "ON CONFLICT(phone) DO UPDATE SET code_hash=excluded.code_hash, expires_at=excluded.expires_at, attempts=0",
-            (phone, _sha256_hash(code), now + SMS_CODE_TTL_S * 1000),
+            "INSERT INTO sms_codes (phone, code_hash, expires_at, attempts, last_send_day, day_sent) "
+            "VALUES (?, ?, ?, 0, ?, ?) "
+            "ON CONFLICT(phone) DO UPDATE SET code_hash=excluded.code_hash, expires_at=excluded.expires_at, "
+            "attempts=0, last_send_day=excluded.last_send_day, day_sent=excluded.day_sent",
+            (phone, _sha256_hash(code), now + SMS_CODE_TTL_S * 1000, today, day_sent),
         )
         db.commit()
     _sms_provider_send(phone, code)
