@@ -28,6 +28,14 @@ FACTOR_EXPOSURE_PATH = os.getenv("FACTOR_EXPOSURE_DATA", str(DATA_DIR_DEFAULT / 
 USERS_DB = os.getenv("USERS_DB", str(WEB_ROOT / "data" / "users.sqlite"))
 PORT = int(os.getenv("PORT", "8788"))
 
+# --- Tencent Cloud SMS (verification-code login) ---
+SMS_SECRET_ID = os.getenv("SMS_SECRET_ID", "")
+SMS_SECRET_KEY = os.getenv("SMS_SECRET_KEY", "")
+SMS_SDK_APP_ID = os.getenv("SMS_SDK_APP_ID", "")
+SMS_SIGN_NAME = os.getenv("SMS_SIGN_NAME", "")
+SMS_TEMPLATE_ID = os.getenv("SMS_TEMPLATE_ID", "")
+SMS_DEV_REVEAL = os.getenv("SMS_DEV_REVEAL", "0") == "1"
+
 # --- market data backend ---
 # Original: MARKET_DATA_BACKEND || (NODE_ENV === 'test' ? 'file' : 'postgres')
 MARKET_DATA_BACKEND = os.getenv("MARKET_DATA_BACKEND")

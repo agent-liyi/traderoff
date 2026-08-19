@@ -12,6 +12,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 import hashlib
+import logging
 import secrets
 import sqlite3
 import threading
@@ -20,6 +21,8 @@ import time
 import bcrypt
 
 from . import config
+
+logger = logging.getLogger(__name__)
 
 SESSION_TTL_S = 7 * 86400  # 7 days
 SMS_CODE_TTL_S = 300        # 5 minutes
@@ -224,11 +227,33 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def _sms_provider_send(phone: str, code: str) -> str:
-    """Send an SMS via Tencent Cloud SMS. Overridden in tests.
+    """Send an SMS via Tencent Cloud SMS.
 
-    In production this calls the Tencent Cloud SMS SDK; for now it returns the
-    code so the flow is testable without a real SMS provider.
+    If SMS credentials are not configured (dev stage), fall back to a no-op
+    that returns the code so the flow remains testable.
     """
+    if not (config.SMS_SECRET_ID and config.SMS_SECRET_KEY and config.SMS_SDK_APP_ID and config.SMS_SIGN_NAME and config.SMS_TEMPLATE_ID):
+        logger.info("[auth] SMS provider not configured; verification code (dev only): %s", code)
+        return code
+    from tencentcloud.common import credential
+    from tencentcloud.common.profile.client_profile import ClientProfile
+    from tencentcloud.common.profile.http_profile import HttpProfile
+    from tencentcloud.sms.v20210111 import sms_client, models as sms_models
+
+    cred = credential.Credential(config.SMS_SECRET_ID, config.SMS_SECRET_KEY)
+    http_profile = HttpProfile()
+    http_profile.endpoint = "sms.tencentcloudapi.com"
+    client_profile = ClientProfile()
+    client_profile.httpProfile = http_profile
+    client = sms_client.SmsClient(cred, "ap-guangzhou", client_profile)
+    req = sms_models.SendSmsRequest()
+    req.PhoneNumberSet = ["+86" + phone]
+    req.SmsSdkAppId = config.SMS_SDK_APP_ID
+    req.SignName = config.SMS_SIGN_NAME
+    req.TemplateId = config.SMS_TEMPLATE_ID
+    req.TemplateParamSet = [code]
+    client.SendSms(req)
+    logger.info("[auth] SMS sent to %s", phone)
     return code
 
 
