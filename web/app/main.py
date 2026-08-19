@@ -145,38 +145,36 @@ def api_me(request: Request):
 # ---------------------------------------------------------------------------
 
 
-class SendSmsBody(BaseModel):
-    phone: str
+class SendEmailBody(BaseModel):
+    email: str
 
 
 class RegisterBody(BaseModel):
-    phone: str
+    email: str
     code: str
     password: str
 
 
 class LoginBody(BaseModel):
-    phone: str
+    email: str
     password: str | None = None
     code: str | None = None
 
 
-@app.post("/api/auth/sms/send")
-def api_send_sms(body: SendSmsBody):
+@app.post("/api/auth/email/send")
+def api_send_email(body: SendEmailBody):
     try:
-        code = auth.send_sms_code(body.phone)
+        code = auth.send_email_code(body.email)
     except auth.RateLimitError as exc:
         return JSONResponse(status_code=429, content={"error": str(exc)})
-    # In production the code is delivered via SMS; dev endpoint returns it only
-    # when WECHAT_AUTH_MODE-style dev flag is off — keep silent in prod.
-    dev_reveal = os.getenv("SMS_DEV_REVEAL", "0") == "1"
+    dev_reveal = config.SES_DEV_REVEAL
     return JSONResponse(status_code=200, content={"ok": True, **({"code": code} if dev_reveal else {})})
 
 
 @app.post("/api/auth/register")
 def api_register(body: RegisterBody):
     try:
-        user = auth.register(body.phone, body.code, body.password)
+        user = auth.register(body.email, body.code, body.password)
     except auth.AuthError as exc:
         return JSONResponse(status_code=400, content={"error": str(exc)})
     token = auth.create_session(user.id)
@@ -189,13 +187,13 @@ def api_register(body: RegisterBody):
 def api_login(body: LoginBody):
     token = None
     if body.password:
-        token = auth.login_password(body.phone, body.password)
+        token = auth.login_password(body.email, body.password)
         if token is None:
-            return JSONResponse(status_code=401, content={"error": "手机号或密码错误"})
+            return JSONResponse(status_code=401, content={"error": "邮箱或密码错误"})
     elif body.code:
-        if not auth.verify_sms_code(body.phone, body.code):
+        if not auth.verify_email_code(body.email, body.code):
             return JSONResponse(status_code=400, content={"error": "验证码错误或已过期"})
-        user = auth._find_user_by_phone(body.phone) or auth._create_user(body.phone, "sms-temp")
+        user = auth._find_user_by_email(body.email) or auth._create_user(body.email, "email-temp")
         token = auth.create_session(user.id)
     else:
         return JSONResponse(status_code=400, content={"error": "缺少登录凭证"})

@@ -94,12 +94,12 @@ def test_public_user_maps_fields():
 
 
 def test_create_and_current_user_roundtrip(auth_db):
-    user = auth._create_user("13800000001", "secret123")
+    user = auth._create_user("u1@example.com", "secret123")
     token = auth.create_session(user.id)
     got = auth.current_user(f"session={token}")
     assert got is not None
     assert got.id == user.id
-    assert got.name == "0001"
+    assert got.name == "u1"
     assert got.avatar_url is None
 
 
@@ -110,13 +110,13 @@ def test_current_user_none_without_session(auth_db):
 
 
 def test_current_user_unknown_token_returns_none(auth_db):
-    user = auth._create_user("13800000002", "secret123")
+    user = auth._create_user("u2@example.com", "secret123")
     auth.create_session(user.id)
     assert auth.current_user("session=does-not-exist") is None
 
 
 def test_current_user_with_expired_session_returns_none(auth_db, monkeypatch):
-    user = auth._create_user("13800000003", "secret123")
+    user = auth._create_user("u3@example.com", "secret123")
     token = auth.create_session(user.id)
     token_hash = auth._sha256_hash(token)
     # Move "now" far into the future so the session is considered expired.
@@ -128,7 +128,7 @@ def test_current_user_with_expired_session_returns_none(auth_db, monkeypatch):
 
 
 def test_destroy_session_removes_it(auth_db):
-    user = auth._create_user("13800000004", "secret123")
+    user = auth._create_user("u4@example.com", "secret123")
     token = auth.create_session(user.id)
     assert auth.current_user(f"session={token}") is not None
     auth.destroy_session(f"session={token}")

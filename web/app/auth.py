@@ -25,9 +25,9 @@ from . import config
 logger = logging.getLogger(__name__)
 
 SESSION_TTL_S = 7 * 86400  # 7 days
-SMS_CODE_TTL_S = 300        # 5 minutes
-SMS_CODE_MAX_DAILY = 10     # per-phone daily send cap
-SMS_SEND_WINDOW_S = 60      # min interval between sends (anti-spam)
+EMAIL_CODE_TTL_S = 300        # 5 minutes
+EMAIL_CODE_MAX_DAILY = 10     # per-email daily send cap
+EMAIL_SEND_WINDOW_S = 60      # min interval between sends (anti-spam)
 LOGIN_MAX_FAILS = 5         # consecutive failures before lockout
 LOGIN_LOCK_S = 15 * 60      # lockout duration
 
@@ -92,8 +92,8 @@ def _init_schema(db: sqlite3.Connection) -> None:
           state_hash TEXT PRIMARY KEY,
           expires_at INTEGER NOT NULL
         );
-        CREATE TABLE IF NOT EXISTS sms_codes (
-          phone TEXT PRIMARY KEY,
+        CREATE TABLE IF NOT EXISTS email_codes (
+          email TEXT PRIMARY KEY,
           code_hash TEXT NOT NULL,
           expires_at INTEGER NOT NULL,
           attempts INTEGER NOT NULL DEFAULT 0,
@@ -101,7 +101,7 @@ def _init_schema(db: sqlite3.Connection) -> None:
           day_sent INTEGER NOT NULL DEFAULT 0
         );
         CREATE TABLE IF NOT EXISTS login_attempts (
-          phone TEXT PRIMARY KEY,
+          email TEXT PRIMARY KEY,
           failures INTEGER NOT NULL DEFAULT 0,
           locked_until INTEGER NOT NULL DEFAULT 0
         );
@@ -109,14 +109,8 @@ def _init_schema(db: sqlite3.Connection) -> None:
     )
     # ALTER TABLE column migrations (mirror Node)
     columns = {row[1] for row in db.execute("PRAGMA table_info(users)")}
-    if "phone" not in columns:
-        db.execute("ALTER TABLE users ADD COLUMN phone TEXT")
-    if "wechat_openid" not in columns:
-        db.execute("ALTER TABLE users ADD COLUMN wechat_openid TEXT")
     if "avatar_url" not in columns:
         db.execute("ALTER TABLE users ADD COLUMN avatar_url TEXT")
-    db.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_phone_unique ON users(phone) WHERE phone IS NOT NULL")
-    db.execute("CREATE UNIQUE INDEX IF NOT EXISTS users_wechat_openid_unique ON users(wechat_openid) WHERE wechat_openid IS NOT NULL")
     db.commit()
 
 
@@ -130,7 +124,6 @@ class User:
     id: int
     name: str
     avatar_url: str | None
-    phone: str | None = None
 
 
 def public_user(user: User | None) -> dict | None:
@@ -226,142 +219,143 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def _sms_provider_send(phone: str, code: str) -> str:
-    """Send an SMS via Tencent Cloud SMS.
+def _email_provider_send(email: str, code: str) -> str:
+    """Send a verification code email via Tencent Cloud SES.
 
-    If SMS credentials are not configured (dev stage), fall back to a no-op
+    If SES credentials are not configured (dev stage), fall back to a no-op
     that returns the code so the flow remains testable.
     """
-    if not (config.SMS_SECRET_ID and config.SMS_SECRET_KEY and config.SMS_SDK_APP_ID and config.SMS_SIGN_NAME and config.SMS_TEMPLATE_ID):
-        logger.info("[auth] SMS provider not configured; verification code (dev only): %s", code)
+    if not (config.SES_SECRET_ID and config.SES_SECRET_KEY and config.SES_FROM_EMAIL_ADDRESS):
+        logger.info("[auth] email provider not configured; verification code (dev only): %s", code)
         return code
     from tencentcloud.common import credential
     from tencentcloud.common.profile.client_profile import ClientProfile
     from tencentcloud.common.profile.http_profile import HttpProfile
-    from tencentcloud.sms.v20210111 import sms_client, models as sms_models
+    from tencentcloud.ses.v20201002 import ses_client, models as ses_models
 
-    cred = credential.Credential(config.SMS_SECRET_ID, config.SMS_SECRET_KEY)
+    cred = credential.Credential(config.SES_SECRET_ID, config.SES_SECRET_KEY)
     http_profile = HttpProfile()
-    http_profile.endpoint = "sms.tencentcloudapi.com"
+    http_profile.endpoint = "ses.tencentcloudapi.com"
     client_profile = ClientProfile()
     client_profile.httpProfile = http_profile
-    client = sms_client.SmsClient(cred, "ap-guangzhou", client_profile)
-    req = sms_models.SendSmsRequest()
-    req.PhoneNumberSet = ["+86" + phone]
-    req.SmsSdkAppId = config.SMS_SDK_APP_ID
-    req.SignName = config.SMS_SIGN_NAME
-    req.TemplateId = config.SMS_TEMPLATE_ID
-    req.TemplateParamSet = [code]
-    client.SendSms(req)
-    logger.info("[auth] SMS sent to %s", phone)
+    client = ses_client.SesClient(cred, "ap-guangzhou", client_profile)
+    req = ses_models.SendEmailRequest()
+    req.FromEmailAddress = config.SES_FROM_EMAIL_ADDRESS
+    req.Destination = [email]
+    subject = "您的登录验证码"
+    body = f"您的验证码是 {code}，5 分钟内有效。"
+    req.Subject = subject
+    req.Template = ses_models.Template()
+    req.Template.TemplateData = body
+    client.SendEmail(req)
+    logger.info("[auth] verification email sent to %s", email)
     return code
 
 
-def send_sms_code(phone: str) -> str:
-    """Generate a 6-digit code and send it, enforcing per-phone rate limits."""
+def send_email_code(email: str) -> str:
+    """Generate a 6-digit code and send it, enforcing per-email rate limits."""
     code = f"{secrets.randbelow(1000000):06d}"
     now = int(time.time() * 1000)
     today = time.strftime("%Y-%m-%d", time.localtime(now / 1000))
     with _DB_LOCK:
         db = _get_db()
         row = db.execute(
-            "SELECT code_hash, expires_at, last_send_day, day_sent FROM sms_codes WHERE phone = ?", (phone,),
+            "SELECT code_hash, expires_at, last_send_day, day_sent FROM email_codes WHERE email = ?", (email,),
         ).fetchone()
         # per-day cap (anti SMS bombing)
-        if row is not None and row["last_send_day"] == today and row["day_sent"] >= SMS_CODE_MAX_DAILY:
+        if row is not None and row["last_send_day"] == today and row["day_sent"] >= EMAIL_CODE_MAX_DAILY:
             raise RateLimitError("今日验证码发送次数已达上限")
         # send-window rate limit (one code per TTL window)
         if row is not None and row["expires_at"] > now:
             raise RateLimitError("验证码发送过于频繁，请稍后再试")
         day_sent = (row["day_sent"] + 1) if (row is not None and row["last_send_day"] == today) else 1
         db.execute(
-            "INSERT INTO sms_codes (phone, code_hash, expires_at, attempts, last_send_day, day_sent) "
+            "INSERT INTO email_codes (email, code_hash, expires_at, attempts, last_send_day, day_sent) "
             "VALUES (?, ?, ?, 0, ?, ?) "
-            "ON CONFLICT(phone) DO UPDATE SET code_hash=excluded.code_hash, expires_at=excluded.expires_at, "
+            "ON CONFLICT(email) DO UPDATE SET code_hash=excluded.code_hash, expires_at=excluded.expires_at, "
             "attempts=0, last_send_day=excluded.last_send_day, day_sent=excluded.day_sent",
-            (phone, _sha256_hash(code), now + SMS_CODE_TTL_S * 1000, today, day_sent),
+            (email, _sha256_hash(code), now + EMAIL_CODE_TTL_S * 1000, today, day_sent),
         )
         db.commit()
-    _sms_provider_send(phone, code)
+    _email_provider_send(email, code)
     return code
 
 
-def verify_sms_code(phone: str, code: str) -> bool:
+def verify_email_code(email: str, code: str) -> bool:
     now = int(time.time() * 1000)
     with _DB_LOCK:
         db = _get_db()
-        row = db.execute("SELECT code_hash, expires_at, attempts FROM sms_codes WHERE phone = ?", (phone,)).fetchone()
+        row = db.execute("SELECT code_hash, expires_at, attempts FROM email_codes WHERE email = ?", (email,)).fetchone()
         if row is None or row["expires_at"] <= now:
             return False
         if row["attempts"] >= LOGIN_MAX_FAILS:
-            db.execute("DELETE FROM sms_codes WHERE phone = ?", (phone,))
+            db.execute("DELETE FROM email_codes WHERE email = ?", (email,))
             db.commit()
             return False
         if not secrets.compare_digest(row["code_hash"], _sha256_hash(code)):
-            db.execute("UPDATE sms_codes SET attempts = attempts + 1 WHERE phone = ?", (phone,))
+            db.execute("UPDATE email_codes SET attempts = attempts + 1 WHERE email = ?", (email,))
             db.commit()
             return False
         # success -> single use
-        db.execute("DELETE FROM sms_codes WHERE phone = ?", (phone,))
+        db.execute("DELETE FROM email_codes WHERE email = ?", (email,))
         db.commit()
         return True
 
 
-def _create_user(phone: str, password: str) -> User:
+def _create_user(email: str, password: str) -> User:
     with _DB_LOCK:
         db = _get_db()
-        name = phone[-4:]  # short display name
-        email = f"{phone}@sms.local"
+        name = email.split("@")[0]  # short display name from email local part
         cursor = db.execute(
-            "INSERT INTO users (name, email, password_hash, phone) VALUES (?, ?, ?, ?)",
-            (name, email, hash_password(password), phone),
+            "INSERT INTO users (name, email, password_hash) VALUES (?, ?, ?)",
+            (name, email, hash_password(password)),
         )
         db.commit()
-        return User(id=cursor.lastrowid, name=name, avatar_url=None, phone=phone)
+        return User(id=cursor.lastrowid, name=name, avatar_url=None)
 
 
-def register(phone: str, code: str, password: str) -> User:
-    if not verify_sms_code(phone, code):
+def register(email: str, code: str, password: str) -> User:
+    if not verify_email_code(email, code):
         raise AuthError("验证码错误或已过期")
-    # phone uniqueness is enforced by the users_phone_unique index
+    # email uniqueness is enforced by the users_email_unique index
     with _DB_LOCK:
         db = _get_db()
-        existing = db.execute("SELECT id FROM users WHERE phone = ?", (phone,)).fetchone()
+        existing = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
     if existing is not None:
         raise AuthError("该手机号已注册")
-    return _create_user(phone, password)
+    return _create_user(email, password)
 
 
-def login_password(phone: str, password: str) -> str | None:
+def login_password(email: str, password: str) -> str | None:
     now = int(time.time() * 1000)
     with _DB_LOCK:
         db = _get_db()
-        lock = db.execute("SELECT failures, locked_until FROM login_attempts WHERE phone = ?", (phone,)).fetchone()
+        lock = db.execute("SELECT failures, locked_until FROM login_attempts WHERE email = ?", (email,)).fetchone()
         if lock is not None and lock["locked_until"] > now:
             return None  # locked
-        row = db.execute("SELECT id, name, avatar_url, password_hash FROM users WHERE phone = ?", (phone,)).fetchone()
+        row = db.execute("SELECT id, name, avatar_url, password_hash FROM users WHERE email = ?", (email,)).fetchone()
         if row is None or not verify_password(password, row["password_hash"]):
             failures = (lock["failures"] if lock else 0) + 1
             locked_until = now + LOGIN_LOCK_S * 1000 if failures >= LOGIN_MAX_FAILS else 0
             db.execute(
-                "INSERT INTO login_attempts (phone, failures, locked_until) VALUES (?, ?, ?) "
-                "ON CONFLICT(phone) DO UPDATE SET failures=excluded.failures, locked_until=excluded.locked_until",
-                (phone, failures, locked_until),
+                "INSERT INTO login_attempts (email, failures, locked_until) VALUES (?, ?, ?) "
+                "ON CONFLICT(email) DO UPDATE SET failures=excluded.failures, locked_until=excluded.locked_until",
+                (email, failures, locked_until),
             )
             db.commit()
             return None
         # success -> reset failures
         user_id = row["id"]
-        db.execute("DELETE FROM login_attempts WHERE phone = ?", (phone,))
+        db.execute("DELETE FROM login_attempts WHERE email = ?", (email,))
         db.commit()
     # create session outside the lock (create_session acquires it itself)
     return create_session(user_id)
 
 
-def _find_user_by_phone(phone: str) -> User | None:
+def _find_user_by_email(email: str) -> User | None:
     with _DB_LOCK:
         db = _get_db()
-        row = db.execute("SELECT id, name, avatar_url FROM users WHERE phone = ?", (phone,)).fetchone()
+        row = db.execute("SELECT id, name, avatar_url FROM users WHERE email = ?", (email,)).fetchone()
     if row is None:
         return None
-    return User(id=row["id"], name=row["name"], avatar_url=row["avatar_url"], phone=phone)
+    return User(id=row["id"], name=row["name"], avatar_url=row["avatar_url"], email=email)

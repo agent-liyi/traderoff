@@ -163,29 +163,29 @@ def test_path_traversal_does_not_leak_stat_root_outside(monkeypatch):
 # ---------------------------------------------------------------------------
 
 
-def test_sms_send_returns_ok(monkeypatch):
-    monkeypatch.setattr(auth, "_sms_provider_send", lambda phone, code: code)
-    r = client.post("/api/auth/sms/send", json={"phone": "13800138000"})
+def test_email_send_returns_ok(monkeypatch):
+    monkeypatch.setattr(auth, "_email_provider_send", lambda email, code: code)
+    r = client.post("/api/auth/email/send", json={"email": "u@example.com"})
     assert r.status_code == 200
     assert r.json().get("ok") is True
 
 
-def test_sms_send_rate_limited_429(monkeypatch):
-    monkeypatch.setattr(auth, "_sms_provider_send", lambda phone, code: code)
-    client.post("/api/auth/sms/send", json={"phone": "13800138000"})
-    r = client.post("/api/auth/sms/send", json={"phone": "13800138000"})
+def test_email_send_rate_limited_429(monkeypatch):
+    monkeypatch.setattr(auth, "_email_provider_send", lambda email, code: code)
+    client.post("/api/auth/email/send", json={"email": "u@example.com"})
+    r = client.post("/api/auth/email/send", json={"email": "u@example.com"})
     assert r.status_code == 429
 
 
 def test_register_success_sets_cookie(monkeypatch):
-    monkeypatch.setattr(auth, "_sms_provider_send", lambda phone, code: code)
-    code = auth.send_sms_code("13800138000")
-    r = client.post("/api/auth/register", json={"phone": "13800138000", "code": code, "password": "secret123"})
+    monkeypatch.setattr(auth, "_email_provider_send", lambda email, code: code)
+    code = auth.send_email_code("u@example.com")
+    r = client.post("/api/auth/register", json={"email": "u@example.com", "code": code, "password": "secret123"})
     assert r.status_code == 200
     assert "session=" in r.headers.get("set-cookie", "")
 
 
 def test_login_password_401_on_wrong(monkeypatch):
-    r = client.post("/api/auth/login", json={"phone": "13900000000", "password": "wrong"})
+    r = client.post("/api/auth/login", json={"email": "u@example.com", "password": "wrong"})
     assert r.status_code == 401
-    assert r.json()["error"] == "手机号或密码错误"
+    assert r.json()["error"] == "邮箱或密码错误"

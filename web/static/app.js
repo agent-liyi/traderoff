@@ -715,34 +715,34 @@ function initAuthForms() {
   $('#tabPassword').addEventListener('click', () => showTab('password'));
 
   $('#sendCode').addEventListener('click', async () => {
-    const phone = $('#smsPhone').value.trim();
-    if (!phone) { setFormError('请输入手机号'); return; }
+    const email = $('#smsEmail').value.trim();
+    if (!email) { setFormError('请输入邮箱'); return; }
     setFormError('验证码已发送，请查收短信');
-    await fetch('/api/auth/sms/send', {
+    await fetch('/api/auth/email/send', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone }),
+      body: JSON.stringify({ email }),
     });
   });
 
   $('#smsForm').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const phone = $('#smsPhone').value.trim();
+    const email = $('#smsEmail').value.trim();
     const code = $('#smsCode').value.trim();
     const password = ''; // SMS login does not need a password on first use
     const response = await fetch('/api/auth/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, code }),
+      body: JSON.stringify({ email, code }),
     });
     await handleAuthResponse(response);
   });
 
   $('#passwordForm').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const phone = $('#loginPhone').value.trim();
+    const email = $('#loginEmail').value.trim();
     const password = $('#loginPassword').value;
     const response = await fetch('/api/auth/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, password }),
+      body: JSON.stringify({ email, password }),
     });
     await handleAuthResponse(response);
   });

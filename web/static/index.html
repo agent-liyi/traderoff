@@ -321,14 +321,14 @@
 
   <dialog class="auth-dialog" id="authDialog">
     <button class="dialog-close icon-button" id="dialogClose" aria-label="关闭"><i data-lucide="x"></i></button>
-    <div class="auth-copy"><span class="wechat-mark"><i data-lucide="smartphone"></i></span><h2>手机号登录</h2><p>使用短信验证码或密码登录，首次登录会自动创建账户。</p></div>
+    <div class="auth-copy"><span class="wechat-mark"><i data-lucide="mail"></i></span><h2>邮箱登录</h2><p>使用邮箱验证码或密码登录，首次登录会自动创建账户。</p></div>
     <p class="form-error" id="formError"></p>
     <div class="auth-tabs">
       <button class="auth-tab active" id="tabSms" type="button">验证码登录</button>
       <button class="auth-tab" id="tabPassword" type="button">密码登录</button>
     </div>
     <form class="auth-form" id="smsForm">
-      <input class="auth-input" id="smsPhone" type="tel" placeholder="手机号" autocomplete="tel" required>
+      <input class="auth-input" id="smsEmail" type="email" placeholder="邮箱" autocomplete="email" required>
       <div class="auth-row">
         <input class="auth-input" id="smsCode" type="text" placeholder="验证码" inputmode="numeric" maxlength="6" required>
         <button class="auth-send" id="sendCode" type="button">发送验证码</button>
@@ -336,7 +336,7 @@
       <button class="auth-submit" type="submit">登录 / 注册</button>
     </form>
     <form class="auth-form hidden" id="passwordForm">
-      <input class="auth-input" id="loginPhone" type="tel" placeholder="手机号" autocomplete="tel" required>
+      <input class="auth-input" id="loginEmail" type="email" placeholder="邮箱" autocomplete="email" required>
       <input class="auth-input" id="loginPassword" type="password" placeholder="密码" autocomplete="current-password" required>
       <button class="auth-submit" type="submit">登录</button>
     </form>

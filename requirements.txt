@@ -8,4 +8,4 @@ uvicorn
 httpx
 APScheduler==3.11.0
 bcrypt
-tencentcloud-sdk-python-sms
+tencentcloud-sdk-python-ses
