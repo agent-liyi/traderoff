@@ -153,80 +153,39 @@ def test_path_traversal_does_not_leak_stat_root_outside(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
-# WeChat OAuth (development mode)
+# ---------------------------------------------------------------------------
+# Path traversal (security) — see test_path_traversal_does_not_leak_stat_root_outside
 # ---------------------------------------------------------------------------
 
 
-def test_auth_wechat_dev_redirects_to_callback(monkeypatch):
-    monkeypatch.setattr(config, "WECHAT_AUTH_MODE", "development")
-    r = client.get("/api/auth/wechat", follow_redirects=False)
-    assert r.status_code == 302
-    loc = r.headers["location"]
-    assert loc.startswith("/api/auth/wechat/callback?code=development&state=")
-
-
-def test_auth_wechat_not_configured_when_production_missing_keys(monkeypatch):
-    monkeypatch.setattr(config, "WECHAT_AUTH_MODE", "production")
-    monkeypatch.setattr(config, "WECHAT_APP_ID", "")
-    monkeypatch.setattr(config, "WECHAT_APP_SECRET", "")
-    monkeypatch.setattr(config, "WECHAT_REDIRECT_URI", "")
-    r = client.get("/api/auth/wechat", follow_redirects=False)
-    assert r.status_code == 302
-    assert r.headers["location"] == "/?auth=not-configured"
-
-
-def test_full_wechat_login_flow_sets_session_cookie(monkeypatch):
-    monkeypatch.setattr(config, "WECHAT_AUTH_MODE", "development")
-    # 1. obtain a real state via /api/auth/wechat
-    r0 = client.get("/api/auth/wechat", follow_redirects=False)
-    state = parse_qs(urlparse(r0.headers["location"]).query)["state"][0]
-    # 2. callback with that valid state
-    r = client.get(f"/api/auth/wechat/callback?code=development&state={state}", follow_redirects=False)
-    assert r.status_code == 302
-    assert r.headers["location"] == "/?auth=success"
-    setcookie = r.headers.get("set-cookie", "")
-    assert "session=" in setcookie
-    assert "HttpOnly" in setcookie
-    # 3. /api/me now returns the dev user
-    cookieval = setcookie.split(";")[0]
-    r2 = client.get("/api/me", headers={"Cookie": cookieval})
-    assert r2.status_code == 200
-    user = r2.json()["user"]
-    assert user is not None
-    assert user["name"] == "微信测试用户"
-
-    # 4. logout clears the session
-    r3 = client.post("/api/logout", headers={"Cookie": cookieval})
-    assert r3.status_code == 200
-    assert r3.json() == {"ok": True}
-    assert "Max-Age=0" in r3.headers.get("set-cookie", "")
-    r4 = client.get("/api/me", headers={"Cookie": cookieval})
-    assert r4.json()["user"] is None
-
-
-def test_wechat_callback_invalid_state_rejected(monkeypatch):
-    monkeypatch.setattr(config, "WECHAT_AUTH_MODE", "development")
-    r = client.get("/api/auth/wechat/callback?code=development&state=bad-state", follow_redirects=False)
-    assert r.status_code == 302
-    assert r.headers["location"] == "/?auth=invalid-state"
-
-
-def test_wechat_callback_cancelled_when_error_param(monkeypatch):
-    monkeypatch.setattr(config, "WECHAT_AUTH_MODE", "development")
-    # need a valid state
-    r0 = client.get("/api/auth/wechat", follow_redirects=False)
-    state = parse_qs(urlparse(r0.headers["location"]).query)["state"][0]
-    r = client.get(f"/api/auth/wechat/callback?error=denied&state={state}", follow_redirects=False)
-    assert r.status_code == 302
-    assert r.headers["location"] == "/?auth=cancelled"
-
-
 # ---------------------------------------------------------------------------
-# auth_quote helper
+# SMS auth routes
 # ---------------------------------------------------------------------------
 
 
-def test_auth_quote_encodes_special_chars():
-    from web.app.main import auth_quote
-    assert auth_quote("a b") == "a%20b"
-    assert auth_quote("x/y?z") == "x%2Fy%3Fz"
+def test_sms_send_returns_ok(monkeypatch):
+    monkeypatch.setattr(auth, "_sms_provider_send", lambda phone, code: code)
+    r = client.post("/api/auth/sms/send", json={"phone": "13800138000"})
+    assert r.status_code == 200
+    assert r.json().get("ok") is True
+
+
+def test_sms_send_rate_limited_429(monkeypatch):
+    monkeypatch.setattr(auth, "_sms_provider_send", lambda phone, code: code)
+    client.post("/api/auth/sms/send", json={"phone": "13800138000"})
+    r = client.post("/api/auth/sms/send", json={"phone": "13800138000"})
+    assert r.status_code == 429
+
+
+def test_register_success_sets_cookie(monkeypatch):
+    monkeypatch.setattr(auth, "_sms_provider_send", lambda phone, code: code)
+    code = auth.send_sms_code("13800138000")
+    r = client.post("/api/auth/register", json={"phone": "13800138000", "code": code, "password": "secret123"})
+    assert r.status_code == 200
+    assert "session=" in r.headers.get("set-cookie", "")
+
+
+def test_login_password_401_on_wrong(monkeypatch):
+    r = client.post("/api/auth/login", json={"phone": "13900000000", "password": "wrong"})
+    assert r.status_code == 401
+    assert r.json()["error"] == "手机号或密码错误"

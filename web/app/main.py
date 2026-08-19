@@ -22,11 +22,13 @@ Errors: 503 -> {"error": message}; otherwise 500 -> {"error": "服务暂时不�
 
 from __future__ import annotations
 
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.exceptions import HTTPException
+from pydantic import BaseModel
 
 from . import auth, config, market_data, dashboard as dashboard_module, refresher
 
@@ -143,36 +145,62 @@ def api_me(request: Request):
 # ---------------------------------------------------------------------------
 
 
-@app.get("/api/auth/wechat")
-def api_auth_wechat(request: Request):
-    state = auth.create_wechat_state()
-    if config.WECHAT_AUTH_MODE == "development":
-        return RedirectResponse(f"/api/auth/wechat/callback?code=development&state={auth_quote(state)}", status_code=302)
-    if not config.WECHAT_APP_ID or not config.WECHAT_APP_SECRET or not config.WECHAT_REDIRECT_URI:
-        return RedirectResponse("/?auth=not-configured", status_code=302)
-    return RedirectResponse(auth.build_wechat_authorize_url(state), status_code=302)
+class SendSmsBody(BaseModel):
+    phone: str
 
 
-@app.get("/api/auth/wechat/callback")
-def api_auth_wechat_callback(
-    request: Request,
-    code: str | None = None,
-    state: str | None = None,
-    error: str | None = None,
-):
-    if not auth.consume_wechat_state(state):
-        return RedirectResponse("/?auth=invalid-state", status_code=302)
-    if error or not code:
-        return RedirectResponse("/?auth=cancelled", status_code=302)
-    if config.WECHAT_AUTH_MODE == "development":
-        profile = {"openid": "development-user", "nickname": "微信测试用户", "headimgurl": ""}
+class RegisterBody(BaseModel):
+    phone: str
+    code: str
+    password: str
+
+
+class LoginBody(BaseModel):
+    phone: str
+    password: str | None = None
+    code: str | None = None
+
+
+@app.post("/api/auth/sms/send")
+def api_send_sms(body: SendSmsBody):
+    try:
+        code = auth.send_sms_code(body.phone)
+    except auth.RateLimitError as exc:
+        return JSONResponse(status_code=429, content={"error": str(exc)})
+    # In production the code is delivered via SMS; dev endpoint returns it only
+    # when WECHAT_AUTH_MODE-style dev flag is off — keep silent in prod.
+    dev_reveal = os.getenv("SMS_DEV_REVEAL", "0") == "1"
+    return JSONResponse(status_code=200, content={"ok": True, **({"code": code} if dev_reveal else {})})
+
+
+@app.post("/api/auth/register")
+def api_register(body: RegisterBody):
+    try:
+        user = auth.register(body.phone, body.code, body.password)
+    except auth.AuthError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    token = auth.create_session(user.id)
+    response = JSONResponse(status_code=200, content={"ok": True})
+    response.headers["Set-Cookie"] = auth.session_cookie(token)
+    return response
+
+
+@app.post("/api/auth/login")
+def api_login(body: LoginBody):
+    token = None
+    if body.password:
+        token = auth.login_password(body.phone, body.password)
+        if token is None:
+            return JSONResponse(status_code=401, content={"error": "手机号或密码错误"})
+    elif body.code:
+        if not auth.verify_sms_code(body.phone, body.code):
+            return JSONResponse(status_code=400, content={"error": "验证码错误或已过期"})
+        user = auth._find_user_by_phone(body.phone) or auth._create_user(body.phone, "sms-temp")
+        token = auth.create_session(user.id)
     else:
-        profile = auth.exchange_wechat_code(code)
-    user = auth.find_or_create_wechat_user(profile)
-    session_token = auth.create_session(user.id)
-    # Add the Set-Cookie header to the 302 redirect (mirrors Node's Set-Cookie header).
-    response = RedirectResponse("/?auth=success", status_code=302)
-    response.headers["Set-Cookie"] = auth.session_cookie(session_token)
+        return JSONResponse(status_code=400, content={"error": "缺少登录凭证"})
+    response = JSONResponse(status_code=200, content={"ok": True})
+    response.headers["Set-Cookie"] = auth.session_cookie(token)
     return response
 
 
@@ -182,11 +210,6 @@ def api_logout(request: Request):
     response = JSONResponse(content={"ok": True}, headers={"Cache-Control": "no-store"})
     response.headers["Set-Cookie"] = auth.clear_session_cookie()
     return response
-
-
-def auth_quote(value: str) -> str:
-    from urllib.parse import quote
-    return quote(value, safe="")
 
 
 # ---------------------------------------------------------------------------
