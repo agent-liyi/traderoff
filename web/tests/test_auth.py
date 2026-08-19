@@ -94,13 +94,13 @@ def test_public_user_maps_fields():
 
 
 def test_create_and_current_user_roundtrip(auth_db):
-    user = auth.find_or_create_wechat_user({"openid": "o1", "nickname": "测试", "headimgurl": ""})
+    user = auth._create_user("13800000001", "secret123")
     token = auth.create_session(user.id)
     got = auth.current_user(f"session={token}")
     assert got is not None
     assert got.id == user.id
-    assert got.name == "测试"
-    assert got.avatar_url == ""
+    assert got.name == "0001"
+    assert got.avatar_url is None
 
 
 def test_current_user_none_without_session(auth_db):
@@ -110,13 +110,13 @@ def test_current_user_none_without_session(auth_db):
 
 
 def test_current_user_unknown_token_returns_none(auth_db):
-    user = auth.find_or_create_wechat_user({"openid": "o2", "nickname": "无名"})
+    user = auth._create_user("13800000002", "secret123")
     auth.create_session(user.id)
     assert auth.current_user("session=does-not-exist") is None
 
 
 def test_current_user_with_expired_session_returns_none(auth_db, monkeypatch):
-    user = auth.find_or_create_wechat_user({"openid": "o3", "nickname": "旧"})
+    user = auth._create_user("13800000003", "secret123")
     token = auth.create_session(user.id)
     token_hash = auth._sha256_hash(token)
     # Move "now" far into the future so the session is considered expired.
@@ -128,7 +128,7 @@ def test_current_user_with_expired_session_returns_none(auth_db, monkeypatch):
 
 
 def test_destroy_session_removes_it(auth_db):
-    user = auth.find_or_create_wechat_user({"openid": "o4", "nickname": "删"})
+    user = auth._create_user("13800000004", "secret123")
     token = auth.create_session(user.id)
     assert auth.current_user(f"session={token}") is not None
     auth.destroy_session(f"session={token}")
@@ -140,138 +140,3 @@ def test_destroy_session_missing_cookie_is_noop(auth_db):
     auth.destroy_session("")  # must not raise
 
 
-# ---------------------------------------------------------------------------
-# WeChat OAuth state
-# ---------------------------------------------------------------------------
-
-
-def test_create_and_consume_state_roundtrip(auth_db):
-    state = auth.create_wechat_state()
-    assert state
-    assert auth.consume_wechat_state(state) is True
-    assert auth.consume_wechat_state(state) is False  # single-use
-
-
-def test_consume_wechat_state_rejects_missing(auth_db):
-    assert auth.consume_wechat_state(None) is False
-    assert auth.consume_wechat_state("") is False
-
-
-def test_consume_wechat_state_unknown(auth_db):
-    assert auth.consume_wechat_state("nope") is False
-
-
-def test_consume_wechat_state_expired(auth_db, monkeypatch):
-    state = auth.create_wechat_state()
-    future_ms = int(time.time() * 1000) + auth.WECHAT_STATE_TTL_S * 1000 + 100000
-    monkeypatch.setattr(time, "time", lambda: future_ms)
-    assert auth.consume_wechat_state(state) is False
-
-
-def test_build_wechat_authorize_url_structure(monkeypatch):
-    monkeypatch.setattr(config, "WECHAT_APP_ID", "appid-1")
-    url = auth.build_wechat_authorize_url("st")
-    assert url.startswith("https://open.weixin.qq.com/connect/qrconnect")
-    assert "appid=appid-1" in url
-    assert "scope=snsapi_login" in url
-    assert "state=st" in url
-    assert "#wechat_redirect" in url
-
-
-# ---------------------------------------------------------------------------
-# find_or_create_wechat_user
-# ---------------------------------------------------------------------------
-
-
-def test_find_or_create_inserts_new_user(auth_db):
-    u = auth.find_or_create_wechat_user({"openid": "new-openid", "nickname": "新用户", "headimgurl": "http://a/x.png"})
-    assert u.id > 0
-    assert u.name == "新用户"
-    assert u.avatar_url == "http://a/x.png"
-
-
-def test_find_or_create_returns_existing_and_updates_profile(auth_db):
-    first = auth.find_or_create_wechat_user({"openid": "same", "nickname": "旧名", "headimgurl": "http://a/old.png"})
-    second = auth.find_or_create_wechat_user({"openid": "same", "nickname": "新名", "headimgurl": "http://a/new.png"})
-    assert second.id == first.id
-    assert second.name == "新名"
-    assert second.avatar_url == "http://a/new.png"
-    row = auth._get_db().execute("SELECT name, avatar_url FROM users WHERE id=?", (first.id,)).fetchone()
-    assert row["name"] == "新名"
-    assert row["avatar_url"] == "http://a/new.png"
-
-
-def test_find_or_create_nickname_none_defaults(auth_db):
-    u = auth.find_or_create_wechat_user({"openid": "nonick"})
-    assert u.name == "微信用户"
-    assert u.avatar_url is None
-
-
-def test_find_or_create_truncates_long_nickname(auth_db):
-    long_name = "尼" * 80
-    u = auth.find_or_create_wechat_user({"openid": "long", "nickname": long_name})
-    assert len(u.name) <= 40
-
-
-def test_wechat_openid_unique_reuses_existing(auth_db):
-    auth.find_or_create_wechat_user({"openid": "uniq"})
-    auth.find_or_create_wechat_user({"openid": "uniq"})
-    count = auth._get_db().execute("SELECT count(*) AS c FROM users WHERE wechat_openid='uniq'").fetchone()
-    assert count["c"] == 1
-
-
-# ---------------------------------------------------------------------------
-# _fetch_wechat_json (network mocks)
-# ---------------------------------------------------------------------------
-
-
-def test_fetch_wechat_json_raises_on_non_200(monkeypatch):
-    class FakeResp:
-        status_code = 500
-
-    monkeypatch.setattr("httpx.get", lambda url, **kw: FakeResp())
-    with pytest.raises(RuntimeError, match="微信接口请求失败"):
-        auth._fetch_wechat_json("http://x")
-
-
-def test_fetch_wechat_json_raises_on_errcode(monkeypatch):
-    class FakeResp:
-        status_code = 200
-
-        def json(self):
-            return {"errcode": 40013, "errmsg": "invalid appid"}
-
-    monkeypatch.setattr("httpx.get", lambda url, **kw: FakeResp())
-    with pytest.raises(RuntimeError, match="40013"):
-        auth._fetch_wechat_json("http://x")
-
-
-def test_fetch_wechat_json_returns_json_on_success(monkeypatch):
-    class FakeResp:
-        status_code = 200
-
-        def json(self):
-            return {"openid": "ok"}
-
-    monkeypatch.setattr("httpx.get", lambda url, **kw: FakeResp())
-    assert auth._fetch_wechat_json("http://x") == {"openid": "ok"}
-
-
-def test_exchange_wechat_code_roundtrip(monkeypatch):
-    # Mock _fetch_wechat_json to return a token then a user profile.
-    calls = []
-
-    def fake_fetch(url):
-        calls.append(url)
-        if "access_token" in url:
-            return {"access_token": "tok-1", "openid": "openid-99"}
-        return {"openid": "openid-99", "nickname": "微信用户", "headimgurl": ""}
-
-    monkeypatch.setattr(auth, "_fetch_wechat_json", fake_fetch)
-    result = auth.exchange_wechat_code("the-code")
-    assert result["openid"] == "openid-99"
-    assert len(calls) == 2
-    assert "sns/oauth2/access_token" in calls[0]
-    assert "sns/userinfo" in calls[1]
-    assert "code=the-code" in calls[0]
-    assert "access_token=tok-1" in calls[1]

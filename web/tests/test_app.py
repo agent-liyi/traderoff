@@ -27,22 +27,6 @@ def test_zone_boundaries_follow_notebook_definitions():
 
 
 # ---------------------------------------------------------------------------
-# WeChat authorize URL (server.test.js #2)
-# ---------------------------------------------------------------------------
-
-
-def test_wechat_authorize_url_uses_website_qr_login_and_callback_state(monkeypatch):
-    from urllib.parse import urlparse, parse_qs
-    monkeypatch.setattr(auth, "WECHAT_APP_ID", "", raising=False)
-    url = auth.build_wechat_authorize_url("test-state")
-    parsed = urlparse(url)
-    assert parsed.netloc == "open.weixin.qq.com"
-    assert parsed.path == "/connect/qrconnect"
-    qs = parse_qs(parsed.query)
-    assert qs["scope"] == ["snsapi_login"]
-    assert qs["state"] == ["test-state"]
-
-
 # ---------------------------------------------------------------------------
 # market environment (server.test.js #3)
 # ---------------------------------------------------------------------------

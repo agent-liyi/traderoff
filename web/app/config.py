@@ -28,15 +28,6 @@ FACTOR_EXPOSURE_PATH = os.getenv("FACTOR_EXPOSURE_DATA", str(DATA_DIR_DEFAULT / 
 USERS_DB = os.getenv("USERS_DB", str(WEB_ROOT / "data" / "users.sqlite"))
 PORT = int(os.getenv("PORT", "8788"))
 
-# --- wechat oauth ---
-WECHAT_AUTH_MODE = os.getenv("WECHAT_AUTH_MODE", "development")
-WECHAT_APP_ID = os.getenv("WECHAT_APP_ID", "")
-WECHAT_APP_SECRET = os.getenv("WECHAT_APP_SECRET", "")
-WECHAT_REDIRECT_URI = os.getenv(
-    "WECHAT_REDIRECT_URI", f"http://localhost:{PORT}/api/auth/wechat/callback"
-)
-WECHAT_STATE_TTL_S = 10 * 60  # 10 minutes
-
 # --- market data backend ---
 # Original: MARKET_DATA_BACKEND || (NODE_ENV === 'test' ? 'file' : 'postgres')
 MARKET_DATA_BACKEND = os.getenv("MARKET_DATA_BACKEND")
