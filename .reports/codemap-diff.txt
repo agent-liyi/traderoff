@@ -1,0 +1,25 @@
+# 代码地图差异报告
+
+生成时间:2026-08-18 (UTC+08)
+对比基线:无上一版(codemaps/ 目录首次创建)
+
+## 差异统计
+- 上一版本地图文件:0
+- 本次生成地图文件:4(architecture/backend/frontend/data.md)
+- 变更百分比:**100%(首次创建,无上一版可比)**
+
+## 说明
+`codemaps/` 此前不存在。本次为首次生成架构文档,全部文件为新增,变更百分比按规则记录为 100%。
+因无上一版,无法做逐文件 diff;本报告作为后续版本的对比基线。
+
+## 本次生成文件
+- codemaps/architecture.md   —— 整体架构(容器/进程/数据流/技术栈)
+- codemaps/backend.md        —— 后端结构(web/app 模块依赖/认证流程)
+- codemaps/frontend.md       —— 前端结构(标签页/数据端点/app.js 函数)
+- codemaps/data.md           —— 数据管道/PostgreSQL/SQLite 表结构
+
+## 覆盖到的最近架构演进
+- 后端已从 Node.js 迁移到 FastAPI(web/app/)
+- market-updater 容器移除,每日刷新并入 traderoff 进程(APScheduler/refresher.py)
+- 全量恐惧贪婪脚本移除,改用增量 + _fgg_common 共享模块
+- CI/CD(GitHub Actions test + SSH 部署)与 SSH 私钥认证已就绪
