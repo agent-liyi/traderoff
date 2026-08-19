@@ -209,6 +209,40 @@ def test_dashboard_hides_raw_values_for_anonymous_visitors():
 
 
 # ---------------------------------------------------------------------------
+# dashboard summarized empty / authenticated (non-anonymous) paths
+# ---------------------------------------------------------------------------
+
+
+def test_dashboard_summarize_all_nonfinite_returns_zeros():
+    # summarize must not crash when every value is non-finite (e.g. all NaN).
+    from web.app import dashboard as dm
+    assert dm.summarize([float("nan"), float("nan")]) == {"min": 0, "max": 0, "average": 0}
+    assert dm.summarize([]) == {"min": 0, "max": 0, "average": 0}
+
+
+def test_dashboard_authenticated_uses_real_raw_values(monkeypatch):
+    # A logged-in user must see real raw indicator values in the series
+    # (non-anonymous path), unlike the anonymous masking.
+    from web.app import dashboard as dash
+    class FakeUser:
+        id = 1
+    rows = [
+        {"date": f"2026-08-0{i}", "our_index": 50.0 + i, "our_zone": "中性",
+         "shanghai_index": 3000.0 + i, "raw_qvix": 15.0 + i, "raw_strength": 0.5,
+         "raw_futures": -5.0, "raw_volume": 0.1, "raw_safety": 0.01}
+        for i in range(1, 5)
+    ]
+    monkeypatch.setattr(market_data, "load_rows", lambda: rows)
+    out = dash.dashboard("1y", FakeUser())
+    # real raw values appear in first series point (qvix 15.0+1, safety 0.01*100)
+    assert out["series"][0]["qvix"] == 16.0
+    assert abs(out["series"][0]["safety"] - 1.0) < 1e-9
+    # indicators carry the real value (not masked zero)
+    qvix = next(x for x in out["indicators"] if x["key"] == "qvix")
+    assert qvix["value"] > 0
+
+
+# ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
 

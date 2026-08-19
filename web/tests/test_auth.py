@@ -255,3 +255,23 @@ def test_fetch_wechat_json_returns_json_on_success(monkeypatch):
 
     monkeypatch.setattr("httpx.get", lambda url, **kw: FakeResp())
     assert auth._fetch_wechat_json("http://x") == {"openid": "ok"}
+
+
+def test_exchange_wechat_code_roundtrip(monkeypatch):
+    # Mock _fetch_wechat_json to return a token then a user profile.
+    calls = []
+
+    def fake_fetch(url):
+        calls.append(url)
+        if "access_token" in url:
+            return {"access_token": "tok-1", "openid": "openid-99"}
+        return {"openid": "openid-99", "nickname": "微信用户", "headimgurl": ""}
+
+    monkeypatch.setattr(auth, "_fetch_wechat_json", fake_fetch)
+    result = auth.exchange_wechat_code("the-code")
+    assert result["openid"] == "openid-99"
+    assert len(calls) == 2
+    assert "sns/oauth2/access_token" in calls[0]
+    assert "sns/userinfo" in calls[1]
+    assert "code=the-code" in calls[0]
+    assert "access_token=tok-1" in calls[1]
