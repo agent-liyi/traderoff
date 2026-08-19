@@ -688,20 +688,64 @@ function openAuth() {
   $('#authDialog').showModal();
 }
 
-function showAuthResult() {
-  const params = new URLSearchParams(window.location.search);
-  const result = params.get('auth');
-  if (!result) return;
-  const messages = {
-    'not-configured': '微信登录尚未完成服务端配置。',
-    'invalid-state': '登录请求已失效，请重新发起验证。',
-    cancelled: '微信验证已取消。'
-  };
-  if (result !== 'success') {
-    openAuth();
-    $('#formError').textContent = messages[result] || '微信登录失败，请重试。';
+function setFormError(message) {
+  $('#formError').textContent = message || '';
+}
+
+async function handleAuthResponse(response) {
+  const data = await response.json();
+  if (response.ok) {
+    $('#authDialog').close();
+    setFormError('');
+    await initAuth();
+  } else {
+    setFormError(data.error || '登录失败，请重试');
   }
-  history.replaceState({}, '', window.location.pathname);
+}
+
+function initAuthForms() {
+  const showTab = (which) => {
+    $('#smsForm').classList.toggle('hidden', which !== 'sms');
+    $('#passwordForm').classList.toggle('hidden', which !== 'password');
+    $('#tabSms').classList.toggle('active', which === 'sms');
+    $('#tabPassword').classList.toggle('active', which === 'password');
+    setFormError('');
+  };
+  $('#tabSms').addEventListener('click', () => showTab('sms'));
+  $('#tabPassword').addEventListener('click', () => showTab('password'));
+
+  $('#sendCode').addEventListener('click', async () => {
+    const phone = $('#smsPhone').value.trim();
+    if (!phone) { setFormError('请输入手机号'); return; }
+    setFormError('验证码已发送，请查收短信');
+    await fetch('/api/auth/sms/send', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone }),
+    });
+  });
+
+  $('#smsForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const phone = $('#smsPhone').value.trim();
+    const code = $('#smsCode').value.trim();
+    const password = ''; // SMS login does not need a password on first use
+    const response = await fetch('/api/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, code }),
+    });
+    await handleAuthResponse(response);
+  });
+
+  $('#passwordForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const phone = $('#loginPhone').value.trim();
+    const password = $('#loginPassword').value;
+    const response = await fetch('/api/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, password }),
+    });
+    await handleAuthResponse(response);
+  });
 }
 
 function renderUser() {
@@ -760,4 +804,4 @@ window.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$
 initIcons();
 const yearEl = $('#siteYearYear'); if (yearEl) yearEl.textContent = String(new Date().getFullYear());
 await Promise.all([loadDashboard(), initAuth()]);
-showAuthResult();
+initAuthForms();

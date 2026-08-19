@@ -281,3 +281,15 @@ h1 { margin-bottom: 9px; font-size: 30px; line-height: 1.25; }
   .site-footer-row { gap: 4px 10px; font-size: 11px; }
   .site-footer-divider:last-of-type { display: none; }
 }
+
+/* Auth forms (SMS verification + password login) */
+.auth-tabs { display: flex; margin: 16px 0 12px; border-bottom: 1px solid var(--line-soft); }
+.auth-tab { flex: 1; padding: 9px 0; border: 0; background: transparent; color: var(--muted); font-size: 13px; cursor: pointer; }
+.auth-tab.active { color: var(--ink); font-weight: 700; border-bottom: 2px solid var(--ink); }
+.auth-form { display: grid; gap: 12px; }
+.auth-form.hidden { display: none; }
+.auth-row { display: flex; gap: 9px; }
+.auth-input { width: 100%; height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 4px; font-size: 14px; }
+.auth-send { flex-shrink: 0; height: 40px; padding: 0 14px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); font-size: 12px; cursor: pointer; white-space: nowrap; }
+.auth-submit { height: 44px; border: 0; border-radius: 4px; background: var(--ink); color: white; font-size: 14px; font-weight: 700; cursor: pointer; }
+.auth-submit:hover { opacity: .92; }

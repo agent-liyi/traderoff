@@ -16,7 +16,7 @@
     <div class="header-actions">
       <span class="market-status"><i></i> 数据已更新 <b id="headerDate">--</b></span>
 
-      <button class="auth-button" id="authButton"><i data-lucide="scan-line"></i><span>微信登录</span></button>
+      <button class="auth-button" id="authButton"><i data-lucide="log-in"></i><span>登录</span></button>
       <div class="user-menu hidden" id="userMenu">
         <button class="user-trigger" id="userTrigger"><span id="userInitial">U</span><b id="userName">账户</b><i data-lucide="chevron-down"></i></button>
         <button class="logout-button" id="logoutButton"><i data-lucide="log-out"></i>退出登录</button>
@@ -321,10 +321,26 @@
 
   <dialog class="auth-dialog" id="authDialog">
     <button class="dialog-close icon-button" id="dialogClose" aria-label="关闭"><i data-lucide="x"></i></button>
-    <div class="auth-copy"><span class="wechat-mark"><i data-lucide="message-circle-more"></i></span><h2>微信扫码登录</h2><p>使用微信身份验证，首次登录会自动创建账户。</p></div>
+    <div class="auth-copy"><span class="wechat-mark"><i data-lucide="smartphone"></i></span><h2>手机号登录</h2><p>使用短信验证码或密码登录，首次登录会自动创建账户。</p></div>
     <p class="form-error" id="formError"></p>
-    <a class="wechat-login-button" href="/api/auth/wechat"><i data-lucide="scan-line"></i><span>打开微信验证</span></a>
-    <p class="auth-privacy">登录即表示你同意仅将微信公开资料用于账户识别。</p>
+    <div class="auth-tabs">
+      <button class="auth-tab active" id="tabSms" type="button">验证码登录</button>
+      <button class="auth-tab" id="tabPassword" type="button">密码登录</button>
+    </div>
+    <form class="auth-form" id="smsForm">
+      <input class="auth-input" id="smsPhone" type="tel" placeholder="手机号" autocomplete="tel" required>
+      <div class="auth-row">
+        <input class="auth-input" id="smsCode" type="text" placeholder="验证码" inputmode="numeric" maxlength="6" required>
+        <button class="auth-send" id="sendCode" type="button">发送验证码</button>
+      </div>
+      <button class="auth-submit" type="submit">登录 / 注册</button>
+    </form>
+    <form class="auth-form hidden" id="passwordForm">
+      <input class="auth-input" id="loginPhone" type="tel" placeholder="手机号" autocomplete="tel" required>
+      <input class="auth-input" id="loginPassword" type="password" placeholder="密码" autocomplete="current-password" required>
+      <button class="auth-submit" type="submit">登录</button>
+    </form>
+    <p class="auth-privacy">登录即表示你同意本网站的账户与隐私条款。</p>
   </dialog>
 
   <script src="/vendor/echarts.min.js"></script>
