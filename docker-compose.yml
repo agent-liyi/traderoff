@@ -41,10 +41,9 @@ services:
       - ./web/data:/app/web/data
       - ./db:/app/db:ro
     environment:
-      WECHAT_AUTH_MODE: ${WECHAT_AUTH_MODE:-development}
-      WECHAT_APP_ID: ${WECHAT_APP_ID:-}
-      WECHAT_APP_SECRET: ${WECHAT_APP_SECRET:-}
-      WECHAT_REDIRECT_URI: ${WECHAT_REDIRECT_URI:-https://${TRADEROFF_DOMAIN:-localhost}/api/auth/wechat/callback}
+      SES_SECRET_ID: ${SES_SECRET_ID:-}
+      SES_SECRET_KEY: ${SES_SECRET_KEY:-}
+      SES_FROM_EMAIL_ADDRESS: ${SES_FROM_EMAIL_ADDRESS:-}
       MARKET_DATA_BACKEND: postgres
       MARKET_DATABASE_URL: postgresql://traderoff:${POSTGRES_PASSWORD}@postgres:5432/traderoff
       TUSHARE_TOKEN: ${TUSHARE_TOKEN}
