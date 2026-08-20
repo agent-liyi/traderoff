@@ -67,8 +67,8 @@ jobs:
             fi
             git reset --hard origin/main
             echo "--- Rebuild images ---"
-            docker compose build traderoff market-updater
+            docker compose build traderoff
             echo "--- Restart services ---"
-            docker compose up -d --no-deps --force-recreate traderoff market-updater
+            docker compose up -d --no-deps --force-recreate traderoff
             echo "--- Health ---"
             docker compose ps
