@@ -245,11 +245,11 @@ def _email_provider_send(email: str, code: str) -> str:
     subject = "您的登录验证码"
     body = f"您的验证码是 {code}，5 分钟内有效。"
     req.Subject = subject
-    # 普通邮件(纯文本):腾讯云 SES 的 SendEmailRequest 用 Simple 字段直接发正文,
-    # 无需在控制台预建模板。
+    # 普通邮件(纯文本):腾讯云 SES 的 Simple.Text 必须是 Base64 编码后的正文。
+    import base64
     simple = ses_models.Simple()
     simple.Html = None
-    simple.Text = body
+    simple.Text = base64.b64encode(body.encode("utf-8")).decode("ascii")
     req.Simple = simple
     client.SendEmail(req)
     logger.info("[auth] verification email sent to %s", email)
