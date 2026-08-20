@@ -705,30 +705,29 @@ async function handleAuthResponse(response) {
 
 function initAuthForms() {
   const showTab = (which) => {
-    $('#smsForm').classList.toggle('hidden', which !== 'sms');
+    $('#codeForm').classList.toggle('hidden', which !== 'code');
     $('#passwordForm').classList.toggle('hidden', which !== 'password');
-    $('#tabSms').classList.toggle('active', which === 'sms');
+    $('#tabCode').classList.toggle('active', which === 'code');
     $('#tabPassword').classList.toggle('active', which === 'password');
     setFormError('');
   };
-  $('#tabSms').addEventListener('click', () => showTab('sms'));
+  $('#tabCode').addEventListener('click', () => showTab('code'));
   $('#tabPassword').addEventListener('click', () => showTab('password'));
 
   $('#sendCode').addEventListener('click', async () => {
-    const email = $('#smsEmail').value.trim();
+    const email = $('#codeEmail').value.trim();
     if (!email) { setFormError('请输入邮箱'); return; }
-    setFormError('验证码已发送，请查收短信');
+    setFormError('验证码已发送，请查收邮件');
     await fetch('/api/auth/email/send', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
     });
   });
 
-  $('#smsForm').addEventListener('submit', async (event) => {
+  $('#codeForm').addEventListener('submit', async (event) => {
     event.preventDefault();
-    const email = $('#smsEmail').value.trim();
-    const code = $('#smsCode').value.trim();
-    const password = ''; // SMS login does not need a password on first use
+    const email = $('#codeEmail').value.trim();
+    const code = $('#codeInput').value.trim();
     const response = await fetch('/api/auth/login', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, code }),
@@ -797,6 +796,46 @@ $('#indicatorsLogin').addEventListener('click', openAuth);
 $('#dialogClose').addEventListener('click', () => $('#authDialog').close());
 $('#userTrigger').addEventListener('click', () => $('#userMenu').classList.toggle('open'));
 $('#logoutButton').addEventListener('click', async () => { await fetch('/api/logout', { method: 'POST' }); state.user = null; $('#userMenu').classList.remove('open'); renderUser(); });
+
+function setPasswordError(message) {
+  $('#passwordSetError').textContent = message || '';
+}
+
+function openPasswordSetDialog() {
+  setPasswordError('');
+  $('#newPasswordInput').value = '';
+  $('#newPasswordConfirm').value = '';
+  $('#passwordSetDialog').showModal();
+}
+
+function initPasswordSet() {
+  $('#setPasswordButton').addEventListener('click', openPasswordSetDialog);
+  $('#passwordSetClose').addEventListener('click', () => $('#passwordSetDialog').close());
+  $('#passwordSetForm').addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const new_password = $('#newPasswordInput').value;
+    const confirm = $('#newPasswordConfirm').value;
+    if (new_password !== confirm) {
+      setPasswordError('两次输入的密码不一致');
+      return;
+    }
+    const response = await fetch('/api/auth/password/set', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ new_password }),
+    });
+    const data = await response.json();
+    if (response.ok) {
+      setPasswordError('');
+      $('#passwordSetDialog').close();
+      $('#userMenu').classList.remove('open');
+    } else {
+      setPasswordError(data.error || '保存失败，请重试');
+    }
+  });
+}
+
+initPasswordSet();
 
 window.addEventListener('resize', () => { state.charts.forEach((chart) => chart.resize()); if (state.environment && !$('#environmentView').classList.contains('hidden')) renderEnvironmentTrend(); if (state.style && !$('#styleView').classList.contains('hidden')) renderStyleTrend(); if (state.industry && !$('#industryView').classList.contains('hidden')) { renderIndustryTrend([...state.industry.indices].sort((left, right) => Number(right.week) - Number(left.week))); } if (state.volume && !$('#volumeView').classList.contains('hidden')) renderVolume(); if (state.volatility && !$('#volatilityView').classList.contains('hidden')) renderVolatility(); if (state.turnover && !$('#turnoverView').classList.contains('hidden')) renderTurnover(); if (state.breadth && !$('#breadthView').classList.contains('hidden')) renderBreadth(); if (state.factors && !$('#factorView').classList.contains('hidden')) { renderFactorIndexChart(); renderFactorDistributionChart($('#factorDistributionSelect').value); } state.detailChart?.resize(); });
 window.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !$('#detailView').classList.contains('hidden')) closeDetail(); });

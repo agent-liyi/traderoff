@@ -203,7 +203,7 @@ def clear_session_cookie() -> str:
 
 
 # ---------------------------------------------------------------------------
-# SMS verification + password auth (replaces WeChat OAuth)
+# Email verification + password auth (replaces WeChat OAuth)
 # ---------------------------------------------------------------------------
 
 
@@ -304,7 +304,19 @@ def verify_email_code(email: str, code: str) -> bool:
         return True
 
 
+# Min length enforced for any user-supplied password (bcrypt hash; short
+# passwords would still match bcrypt's 72-byte truncation, but we cap below
+# to discourage trivially-guessable values).
+MIN_PASSWORD_LENGTH = 8
+
+
 def _create_user(email: str, password: str) -> User:
+    # If the caller passes the placeholder "email-temp" (legacy callers from
+    # the email-code login path that auto-create the account), generate an
+    # unguessable random password so the password-login flow cannot be used
+    # to log in as that account until the user explicitly sets one.
+    if password == "email-temp":
+        password = secrets.token_urlsafe(32)
     with _DB_LOCK:
         db = _get_db()
         name = email.split("@")[0]  # short display name from email local part
@@ -314,6 +326,30 @@ def _create_user(email: str, password: str) -> User:
         )
         db.commit()
         return User(id=cursor.lastrowid, name=name, avatar_url=None)
+
+
+def set_password(user_id: int, new_password: str) -> None:
+    """Hash and store a new password for an already-authenticated user.
+
+    Used by the "set password" UI so a user who logged in via email code
+    (where the original password is an unguessable random secret) can opt
+    into password login. Requires the caller to be in an active session.
+    """
+    if not isinstance(new_password, str) or len(new_password) < MIN_PASSWORD_LENGTH:
+        raise AuthError(f"密码长度至少 {MIN_PASSWORD_LENGTH} 位")
+    with _DB_LOCK:
+        db = _get_db()
+        db.execute(
+            "UPDATE users SET password_hash = ? WHERE id = ?",
+            (hash_password(new_password), user_id),
+        )
+        # Successful password change resets any prior login-lock counter
+        # so the user is not penalized by an earlier failed-attempt lockout.
+        db.execute(
+            "DELETE FROM login_attempts WHERE email = (SELECT email FROM users WHERE id = ?)",
+            (user_id,),
+        )
+        db.commit()
 
 
 def register(email: str, code: str, password: str) -> User:
@@ -360,4 +396,4 @@ def _find_user_by_email(email: str) -> User | None:
         row = db.execute("SELECT id, name, avatar_url FROM users WHERE email = ?", (email,)).fetchone()
     if row is None:
         return None
-    return User(id=row["id"], name=row["name"], avatar_url=row["avatar_url"], email=email)
+    return User(id=row["id"], name=row["name"], avatar_url=row["avatar_url"])

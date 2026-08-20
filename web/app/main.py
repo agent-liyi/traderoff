@@ -161,6 +161,10 @@ class LoginBody(BaseModel):
     code: str | None = None
 
 
+class SetPasswordBody(BaseModel):
+    new_password: str
+
+
 @app.post("/api/auth/email/send")
 def api_send_email(body: SendEmailBody):
     try:
@@ -208,6 +212,18 @@ def api_logout(request: Request):
     response = JSONResponse(content={"ok": True}, headers={"Cache-Control": "no-store"})
     response.headers["Set-Cookie"] = auth.clear_session_cookie()
     return response
+
+
+@app.post("/api/auth/password/set")
+def api_set_password(body: SetPasswordBody, request: Request):
+    user = _current_user(request)
+    if user is None:
+        return JSONResponse(status_code=401, content={"error": "请先登录"})
+    try:
+        auth.set_password(user.id, body.new_password)
+    except auth.AuthError as exc:
+        return JSONResponse(status_code=400, content={"error": str(exc)})
+    return JSONResponse(status_code=200, content={"ok": True})
 
 
 # ---------------------------------------------------------------------------
