@@ -33,6 +33,7 @@ PORT = int(os.getenv("PORT", "8788"))
 SES_SECRET_ID = os.getenv("SES_SECRET_ID", "")
 SES_SECRET_KEY = os.getenv("SES_SECRET_KEY", "")
 SES_FROM_EMAIL_ADDRESS = os.getenv("SES_FROM_EMAIL_ADDRESS", "")
+SES_TEMPLATE_ID = os.getenv("SES_TEMPLATE_ID", "")
 SES_DEV_REVEAL = os.getenv("SES_DEV_REVEAL", "0") == "1"
 
 # --- market data backend ---

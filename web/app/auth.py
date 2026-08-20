@@ -12,6 +12,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 import hashlib
+import json
 import logging
 import secrets
 import sqlite3
@@ -225,7 +226,7 @@ def _email_provider_send(email: str, code: str) -> str:
     If SES credentials are not configured (dev stage), fall back to a no-op
     that returns the code so the flow remains testable.
     """
-    if not (config.SES_SECRET_ID and config.SES_SECRET_KEY and config.SES_FROM_EMAIL_ADDRESS):
+    if not (config.SES_SECRET_ID and config.SES_SECRET_KEY and config.SES_FROM_EMAIL_ADDRESS and config.SES_TEMPLATE_ID):
         logger.info("[auth] email provider not configured; verification code (dev only): %s", code)
         return code
     from tencentcloud.common import credential
@@ -242,15 +243,12 @@ def _email_provider_send(email: str, code: str) -> str:
     req = ses_models.SendEmailRequest()
     req.FromEmailAddress = config.SES_FROM_EMAIL_ADDRESS
     req.Destination = [email]
-    subject = "您的登录验证码"
-    body = f"您的验证码是 {code}，5 分钟内有效。"
-    req.Subject = subject
-    # 普通邮件(纯文本):腾讯云 SES 的 Simple.Text 必须是 Base64 编码后的正文。
-    import base64
-    simple = ses_models.Simple()
-    simple.Html = None
-    simple.Text = base64.b64encode(body.encode("utf-8")).decode("ascii")
-    req.Simple = simple
+    req.Subject = "您的登录验证码"
+    # 香港区 SES 未开通自定义发送权限，必须走模版发送。
+    template = ses_models.Template()
+    template.TemplateID = int(config.SES_TEMPLATE_ID)
+    template.TemplateData = json.dumps({"code": code}, ensure_ascii=False)
+    req.Template = template
     client.SendEmail(req)
     logger.info("[auth] verification email sent to %s", email)
     return code

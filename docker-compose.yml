@@ -44,6 +44,7 @@ services:
       SES_SECRET_ID: ${SES_SECRET_ID:-}
       SES_SECRET_KEY: ${SES_SECRET_KEY:-}
       SES_FROM_EMAIL_ADDRESS: ${SES_FROM_EMAIL_ADDRESS:-}
+      SES_TEMPLATE_ID: ${SES_TEMPLATE_ID:-}
       MARKET_DATA_BACKEND: postgres
       MARKET_DATABASE_URL: postgresql://traderoff:${POSTGRES_PASSWORD}@postgres:5432/traderoff
       TUSHARE_TOKEN: ${TUSHARE_TOKEN}
