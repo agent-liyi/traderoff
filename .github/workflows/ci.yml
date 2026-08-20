@@ -51,6 +51,7 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           port: ${{ secrets.SSH_PORT }}
+          command_timeout: 40m
           script: |
             set -e
             cd /home/${{ secrets.SSH_USER }}/apps/traderoff
