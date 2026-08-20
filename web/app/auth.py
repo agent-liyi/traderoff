@@ -322,7 +322,7 @@ def register(email: str, code: str, password: str) -> User:
         db = _get_db()
         existing = db.execute("SELECT id FROM users WHERE email = ?", (email,)).fetchone()
     if existing is not None:
-        raise AuthError("该手机号已注册")
+        raise AuthError("该邮箱已注册")
     return _create_user(email, password)
 
 
