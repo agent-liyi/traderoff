@@ -238,7 +238,7 @@ def _email_provider_send(email: str, code: str) -> str:
     http_profile.endpoint = "ses.tencentcloudapi.com"
     client_profile = ClientProfile()
     client_profile.httpProfile = http_profile
-    client = ses_client.SesClient(cred, "ap-beijing", client_profile)
+    client = ses_client.SesClient(cred, "ap-hongkong", client_profile)
     req = ses_models.SendEmailRequest()
     req.FromEmailAddress = config.SES_FROM_EMAIL_ADDRESS
     req.Destination = [email]
