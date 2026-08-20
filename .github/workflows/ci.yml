@@ -34,3 +34,42 @@ jobs:
       - name: Run tests with coverage
         run: |
           pytest web/tests/ --cov=web.app --cov-report=term-missing --cov-fail-under=75 -q
+
+  deploy:
+    name: Deploy to Tencent Cloud
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          port: ${{ secrets.SSH_PORT }}
+          command_timeout: 40m
+          script: |
+            set -e
+            cd /home/${{ secrets.SSH_USER }}/apps/traderoff
+            echo "--- Sync code (git fetch with retries) ---"
+            fetch_ok=0
+            for i in 1 2 3 4 5; do
+              if timeout 60 git fetch origin main; then fetch_ok=1; break; fi
+              echo "git fetch attempt $i failed; retrying"
+              sleep 5
+            done
+            if [ "$fetch_ok" != "1" ]; then
+              echo "ERROR: could not fetch origin/main (server->GitHub unstable)"
+              exit 1
+            fi
+            git reset --hard origin/main
+            echo "--- Rebuild images ---"
+            docker compose build traderoff
+            echo "--- Restart services ---"
+            docker compose up -d --no-deps --force-recreate traderoff
+            echo "--- Health ---"
+            docker compose ps
